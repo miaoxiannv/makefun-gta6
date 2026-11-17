@@ -1,55 +1,55 @@
-// Cash drops around town: spinning, bobbing green bundles that pay out when the player
-// walks or drives through them, then come back after a while.
+// Cash drops: spinning green bundles of bills tucked around the city, shown on the radar. Walk
+// or drive through one to pocket it; it comes back a while later somewhere you have been.
 import * as THREE from 'three';
-import { CASH, CITY } from '../config.js';
+import { CASH_DROPS, GRID } from '../config.js';
+import { makeRng } from '../core/rng.js';
 
 export class CashDrops {
   constructor(scene, spots) {
-    this.group = new THREE.Group();
-    this.group.name = 'cash';
-    const bundle = new THREE.BoxGeometry(0.7, 0.35, 0.42);
-    const band = new THREE.BoxGeometry(0.72, 0.37, 0.1);
-    const green = new THREE.MeshStandardMaterial({ color: '#43c463', emissive: new THREE.Color('#1f8a3a'), emissiveIntensity: 0.6, roughness: 0.6 });
-    const white = new THREE.MeshStandardMaterial({ color: '#f4f1e4', roughness: 0.6 });
-    const ringMaterial = new THREE.MeshBasicMaterial({ color: '#6dff8f', transparent: true, opacity: 0.45, depthWrite: false });
-    const ring = new THREE.RingGeometry(0.75, 1.0, 28);
-    ring.rotateX(-Math.PI / 2);
-    this.drops = spots.map((spot) => {
-      const holder = new THREE.Group();
-      const money = new THREE.Group();
-      money.add(new THREE.Mesh(bundle, green), new THREE.Mesh(band, white));
-      money.children.forEach((mesh) => { mesh.castShadow = true; });
-      holder.add(money, new THREE.Mesh(ring, ringMaterial));
-      holder.position.set(spot.x, CITY.curb + 0.04, spot.z);
-      this.group.add(holder);
-      return { x: spot.x, z: spot.z, value: spot.value, active: true, timer: 0, holder, money };
+    const rng = makeRng(GRID.seed + 99);
+    const bill = new THREE.BoxGeometry(0.75, 0.32, 0.42);
+    const mat = new THREE.MeshStandardMaterial({ color: '#46c463', emissive: '#1f8f3c', emissiveIntensity: 0.6, roughness: 0.5 });
+    const band = new THREE.MeshStandardMaterial({ color: '#f5e7b0', roughness: 0.6 });
+    const bandGeo = new THREE.BoxGeometry(0.16, 0.34, 0.44);
+    const ringGeo = new THREE.RingGeometry(0.9, 1.15, 28).rotateX(-Math.PI / 2);
+    const ringMat = new THREE.MeshBasicMaterial({ color: '#6dff8f', transparent: true, opacity: 0.55, depthWrite: false });
+    this.drops = spots.map((s) => {
+      const group = new THREE.Group();
+      const stack = new THREE.Mesh(bill, mat);
+      stack.castShadow = true;
+      stack.add(new THREE.Mesh(bandGeo, band));
+      group.add(stack);
+      const ring = new THREE.Mesh(ringGeo, ringMat);
+      ring.position.y = -0.8;
+      group.add(ring);
+      group.position.set(s.x, GRID.curb + 1, s.z);
+      scene.add(group);
+      return { x: s.x, z: s.z, value: Math.round(rng.range(CASH_DROPS.min, CASH_DROPS.max) / 5) * 5, active: true, timer: 0, group, stack, phase: rng() * 6 };
     });
-    scene.add(this.group);
   }
 
-  /** Spin the drops, respawn taken ones and return the total collected by a body at (x, z). */
-  update(dt, time, x, z, reach) {
-    let collected = 0;
-    for (const drop of this.drops) {
-      if (!drop.active) {
-        drop.timer -= dt;
-        if (drop.timer <= 0) {
-          drop.active = true;
-          drop.holder.visible = true;
+  /** Spin the bundles, respawn taken ones and return the cash collected at (x, z) this step. */
+  update(dt, time, x, z, extraReach = 0) {
+    let found = 0;
+    const reach = CASH_DROPS.radius + extraReach;
+    for (const d of this.drops) {
+      if (!d.active) {
+        d.timer -= dt;
+        if (d.timer <= 0) {
+          d.active = true;
+          d.group.visible = true;
         }
         continue;
       }
-      drop.money.rotation.y = time * 2 + drop.x;
-      drop.money.position.y = 0.8 + Math.sin(time * 3 + drop.z) * 0.15;
-      const dx = drop.x - x;
-      const dz = drop.z - z;
-      if (dx * dx + dz * dz < (CASH.radius + reach) ** 2) {
-        drop.active = false;
-        drop.timer = CASH.respawnSeconds;
-        drop.holder.visible = false;
-        collected += drop.value;
+      d.stack.rotation.y = time * 1.8 + d.phase;
+      d.stack.position.y = Math.sin(time * 2.4 + d.phase) * 0.15;
+      if (Math.hypot(d.x - x, d.z - z) < reach) {
+        found += d.value;
+        d.active = false;
+        d.group.visible = false;
+        d.timer = CASH_DROPS.respawn;
       }
     }
-    return collected;
+    return found;
   }
 }

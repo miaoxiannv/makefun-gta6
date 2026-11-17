@@ -1,151 +1,167 @@
-// One car: arcade driving physics (engine, brakes, reverse, speed-sensitive steering, tyre
-// grip and handbrake slides), collisions with the city, and its wheels, lean and lights.
+// One car and its arcade handling: engine force that tails off toward top speed, brakes and
+// reverse, speed-sensitive steering on a bicycle model, tyre grip that bleeds off sideways
+// slip (much less with the handbrake on, so the rear steps out), wall impacts that bounce and
+// scrub speed, and body roll and pitch for feel. Parked cars sleep until something hits them.
 import * as THREE from 'three';
-import { clamp, damp } from '../core/math.js';
-import { CAR_TYPES, buildCarModel } from './car-models.js';
-
-const BRAKE = 32;
-const REVERSE_ACCEL = 8;
-const MAX_REVERSE = 11;
-const MAX_STEER = 0.62;
+import { clamp, damp } from '../core/rng.js';
+import { CAR_TYPES, makeCarModel } from './car-models.js';
 
 export class Car {
-  constructor(typeName, color) {
+  constructor(typeName, colour, x, z, heading) {
     this.typeName = typeName;
     this.type = CAR_TYPES[typeName];
-    this.color = color;
-    const model = buildCarModel(typeName, color);
-    this.model = model.root;
-    this.body = model.body;
-    this.wheels = model.wheels;
-    this.wheelbase = model.wheelbase;
-    this.position = new THREE.Vector3();
+    this.label = this.type.label;
+    this.colour = colour;
+    this.model = makeCarModel(typeName, colour);
+    this.position = new THREE.Vector3(x, 0, z);
     this.velocity = new THREE.Vector3();
-    this.heading = 0;
+    this.heading = heading;
     this.steer = 0;
-    this.forwardSpeed = 0;
-    this.lean = 0;
+    this.roll = 0;
     this.pitch = 0;
     this.driver = null;
     this.asleep = true;
     this.lastImpact = 0;
-    this.headlights = null;
+    this.braking = false;
+    this.radius = this.type.width / 2;
+    this.sync();
   }
 
-  get label() { return this.type.label; }
-  get radius() { return this.type.width / 2; }
+  get object() {
+    return this.model.root;
+  }
+
+  /** Signed speed along the car's nose, m/s. */
+  get forwardSpeed() {
+    return this.velocity.x * Math.sin(this.heading) + this.velocity.z * Math.cos(this.heading);
+  }
 
   placeAt(x, z, heading) {
     this.position.set(x, 0, z);
-    this.heading = heading;
     this.velocity.set(0, 0, 0);
-    this.syncModel(0);
+    this.heading = heading;
+    this.steer = 0;
+    this.sync();
   }
 
-  /** The two circle centres (front and back) used for collisions, written into `out`. */
-  circles(out) {
-    const reach = this.type.length / 2 - this.radius;
-    const fx = Math.sin(this.heading) * reach;
-    const fz = Math.cos(this.heading) * reach;
-    out[0].x = this.position.x + fx; out[0].z = this.position.z + fz;
-    out[1].x = this.position.x - fx; out[1].z = this.position.z - fz;
-    return out;
+  /** Centres of the two circles (nose and tail) that stand in for the body in collisions. */
+  circles() {
+    const off = this.type.length / 2 - this.radius;
+    const fx = Math.sin(this.heading) * off;
+    const fz = Math.cos(this.heading) * off;
+    return [
+      { x: this.position.x + fx, z: this.position.z + fz },
+      { x: this.position.x - fx, z: this.position.z - fz },
+    ];
   }
 
-  /**
-   * Drive one step. `controls` = { throttle, brake, steer, handbrake } (0..1, steer -1..1),
-   * or null for an empty car rolling to a stop. `world` resolves collisions.
-   */
+  /** One step. `controls` is null for a car with nobody at the wheel. */
   update(dt, controls, world) {
-    const fx = Math.sin(this.heading);
-    const fz = Math.cos(this.heading);
-    let forward = this.velocity.x * fx + this.velocity.z * fz;
-    let latX = this.velocity.x - fx * forward;
-    let latZ = this.velocity.z - fz * forward;
-    let grip = 12;
+    const t = this.type;
+    const sin = Math.sin(this.heading);
+    const cos = Math.cos(this.heading);
+    let vf = this.velocity.x * sin + this.velocity.z * cos;
+    let vl = this.velocity.x * -cos + this.velocity.z * sin;
+    const c = controls ?? { throttle: 0, brake: 0, steer: 0, handbrake: false };
 
-    if (controls) {
-      this.asleep = false;
-      const steerLimit = MAX_STEER / (1 + Math.abs(forward) * 0.045);
-      this.steer += (controls.steer * steerLimit - this.steer) * damp(8, dt);
-      if (controls.throttle > 0) {
-        if (forward < -0.5) forward += BRAKE * dt;
-        else forward += this.type.accel * controls.throttle * (1 - Math.max(0, forward) / this.type.maxSpeed) * dt;
-      }
-      if (controls.brake > 0) {
-        if (forward > 0.5) forward -= BRAKE * dt;
-        else if (forward > -MAX_REVERSE) forward -= REVERSE_ACCEL * dt;
-      }
-      grip = this.type.grip;
-      if (controls.handbrake) {
-        grip = 1.4;
-        forward -= Math.sign(forward) * Math.min(Math.abs(forward), 9 * dt);
-      }
-      // Air drag and rolling resistance.
-      forward -= forward * 0.06 * dt;
-      if (!controls.throttle && !controls.brake) forward -= Math.sign(forward) * Math.min(Math.abs(forward), 1.6 * dt);
-    } else {
-      this.steer += (0 - this.steer) * damp(4, dt);
-      forward *= Math.exp(-2.2 * dt);
-      if (Math.abs(forward) < 0.05) forward = 0;
+    // engine, brakes and reverse
+    let accel = 0;
+    this.braking = false;
+    if (c.throttle > 0) {
+      accel += vf < -0.5 ? 18 : t.power * c.throttle * Math.max(0, 1 - vf / t.top) + 1.2;
+      if (vf < -0.5) this.braking = true;
+    }
+    if (c.brake > 0) {
+      if (vf > 0.5) { accel -= 20 * c.brake; this.braking = true; } else accel -= t.power * 0.55 * c.brake * Math.max(0, 1 + vf / 13);
+    }
+    // rolling resistance and air drag
+    const drag = Math.sign(vf) * (0.35 + Math.abs(vf) * 0.04) + (c.throttle || c.brake ? 0 : Math.sign(vf) * 1.1);
+    const before = vf;
+    vf += (accel - drag) * dt;
+    if (!c.throttle && !c.brake && Math.sign(vf) !== Math.sign(before)) vf = 0;
+    if (c.handbrake) {
+      this.braking = true;
+      vf -= Math.sign(vf) * Math.min(Math.abs(vf), 7 * dt);
     }
 
-    const lateralBefore = Math.hypot(latX, latZ);
-    const keep = Math.exp(-grip * dt);
-    latX *= keep;
-    latZ *= keep;
-    const yawRate = (forward * Math.tan(this.steer)) / this.wheelbase * (controls?.handbrake ? 1.35 : 1);
-    this.velocity.set(fx * forward + latX, 0, fz * forward + latZ);
+    // steering: less lock the faster you go, wheel returns to centre on its own
+    const lock = t.lock / (1 + Math.abs(vf) * 0.045);
+    this.steer += (c.steer * lock - this.steer) * damp(c.steer ? 7 : 10, dt);
+    const wheelbase = t.axle * 2;
+    let yawRate = (vf * Math.tan(this.steer)) / wheelbase;
+    if (c.handbrake && Math.abs(vf) > 6) yawRate *= 1.45;
     this.heading += yawRate * dt;
-    this.forwardSpeed = forward;
-    this.position.addScaledVector(this.velocity, dt);
 
-    this.collideWithCity(world);
-    // Ride up onto kerbs and sidewalks.
-    this.position.y += (world.groundHeight(this.position.x, this.position.z) - this.position.y) * damp(18, dt);
-    // Body lean into corners and pitch under acceleration, purely visual.
-    this.lean += (clamp(-yawRate * forward * 0.012 - lateralBefore * 0.01, -0.09, 0.09) - this.lean) * damp(6, dt);
-    if (this.velocity.lengthSq() < 0.0004 && !controls) this.asleep = true;
-    this.syncModel(dt);
+    // tyre grip removes sideways slip; the handbrake lets the back slide out
+    const grip = c.handbrake ? t.grip * 0.12 : t.grip;
+    vl *= Math.exp(-grip * dt);
+    // when the car turns, part of the old forward motion becomes slip (that is the drift)
+    const turn = yawRate * dt;
+    vl += vf * Math.sin(turn) * (c.handbrake ? 0.9 : 0.25);
+
+    const ns = Math.sin(this.heading);
+    const nc = Math.cos(this.heading);
+    const prevX = this.velocity.x;
+    const prevZ = this.velocity.z;
+    this.velocity.set(ns * vf - nc * vl, 0, nc * vf + ns * vl);
+    this.position.x += this.velocity.x * dt;
+    this.position.z += this.velocity.z * dt;
+
+    this.lastImpact = this.collideWorld(world);
+
+    // body roll from lateral acceleration, pitch from longitudinal
+    const ax = (this.velocity.x - prevX) / dt;
+    const az = (this.velocity.z - prevZ) / dt;
+    const along = ax * ns + az * nc;
+    const side = -ax * nc + az * ns;
+    this.roll += (clamp(side * 0.012, -0.09, 0.09) - this.roll) * damp(6, dt);
+    this.pitch += (clamp(-along * 0.006, -0.06, 0.06) - this.pitch) * damp(6, dt);
+
+    // ride height follows the ground (bumping up kerbs)
+    const ground = world.groundHeight(this.position.x, this.position.z);
+    this.position.y += (ground - this.position.y) * damp(14, dt);
+
+    for (const w of this.model.wheels) {
+      w.spin.rotation.x += (this.forwardSpeed / t.wheel) * dt;
+      if (w.front) w.steer.rotation.y = this.steer;
+    }
+    if (!this.driver && Math.hypot(this.velocity.x, this.velocity.z) < 0.05) this.asleep = true;
+    this.sync();
   }
 
-  collideWithCity(world) {
-    const circles = this.circles(Car.scratch);
-    let pushX = 0;
-    let pushZ = 0;
-    for (const c of circles) {
-      const p = { x: c.x + pushX, z: c.z + pushZ };
-      const push = world.resolveCircle(p, this.radius);
-      pushX += push.x;
-      pushZ += push.z;
+  /** Push both body circles out of the city; bounce off walls. Returns the impact speed. */
+  collideWorld(world) {
+    let impact = 0;
+    for (const p of this.circles()) {
+      const before = { x: p.x, z: p.z };
+      const hit = world.resolveCircle(p, this.radius);
+      if (!hit) continue;
+      this.position.x += p.x - before.x;
+      this.position.z += p.z - before.z;
+      const vn = this.velocity.x * hit.nx + this.velocity.z * hit.nz;
+      if (vn < 0) {
+        this.velocity.x -= hit.nx * vn * 1.35;
+        this.velocity.z -= hit.nz * vn * 1.35;
+        this.velocity.multiplyScalar(0.8);
+        impact = Math.max(impact, -vn);
+      }
     }
-    this.lastImpact = 0;
-    const length = Math.hypot(pushX, pushZ);
-    if (length < 1e-6) return;
-    this.position.x += pushX;
-    this.position.z += pushZ;
-    const nx = pushX / length;
-    const nz = pushZ / length;
-    const into = this.velocity.x * nx + this.velocity.z * nz;
-    if (into < 0) {
-      this.velocity.x -= nx * into * 1.35;
-      this.velocity.z -= nz * into * 1.35;
-      this.velocity.multiplyScalar(0.88);
-      this.lastImpact = -into;
-    }
+    return impact;
   }
 
-  syncModel(dt) {
-    this.model.position.copy(this.position);
-    this.model.rotation.y = this.heading;
-    this.body.rotation.z = this.lean;
-    for (const wheel of this.wheels) {
-      wheel.spin.rotation.x += (this.forwardSpeed / this.type.wheelR) * dt;
-      if (wheel.front) wheel.pivot.rotation.y = this.steer;
-    }
+  /** Lamps: headlights at night when someone drives; brake lights on braking. */
+  setLights(night) {
+    const m = this.model;
+    const on = this.driver ? Math.max(0.25, night) : 0;
+    m.headMat.emissiveIntensity = on * 3;
+    m.tailMat.emissiveIntensity = (this.driver ? 0.6 + night * 0.8 : 0) + (this.braking && this.driver ? 2.2 : 0);
   }
 
-  /** Speed in km/h for the HUD. */
-  get speedKmh() { return Math.abs(this.forwardSpeed) * 3.6; }
+  sync() {
+    const m = this.model;
+    m.root.position.copy(this.position);
+    m.root.rotation.y = this.heading;
+    m.chassis.rotation.set(this.pitch, 0, this.roll);
+  }
 }
-Car.scratch = [{ x: 0, z: 0 }, { x: 0, z: 0 }];
+

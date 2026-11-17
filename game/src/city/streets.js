@@ -1,176 +1,112 @@
-// The ground plane of the city: asphalt, raised sidewalk blocks, parks with fountains, lane
-// markings, crosswalks and the concrete barriers on the land edges.
+// The ground of Port Solano: asphalt for every road, raised kerbed sidewalks around each block,
+// lawns in the parks and up in Palm Heights, concrete yards in Dockside, the painted road
+// markings (double yellow centre lines, lane dashes, stop lines and zebra crossings), the beach
+// promenade and the scrubland beyond the city limits.
 import * as THREE from 'three';
-import { CITY, COAST, HALF } from '../config.js';
-import { makeRandom } from '../core/random.js';
-import { roadCenter } from './layout.js';
+import { CITY_HALF, CITY_SIZE, GRID, SHORE } from '../config.js';
+import { MeshBuilder } from '../core/mesh-builder.js';
+import { asphaltTexture, grassTexture, pavementTexture, sandTexture } from '../core/textures.js';
+import { blockStart, roadCentre } from './plan.js';
 
-function noiseTexture(base, spots, size, repeat, seed) {
-  const canvas = document.createElement('canvas');
-  canvas.width = size;
-  canvas.height = size;
-  const ctx = canvas.getContext('2d');
-  ctx.fillStyle = base;
-  ctx.fillRect(0, 0, size, size);
-  const random = makeRandom(seed);
-  for (const [color, count, dot] of spots) {
-    ctx.fillStyle = color;
-    for (let k = 0; k < count; k += 1) ctx.fillRect(random() * size, random() * size, dot, dot);
+const YELLOW = new THREE.Color('#f2c230');
+const WHITE = new THREE.Color('#f4f4ee');
+const CURB_SIDE = new THREE.Color('#a9a397');
+
+function material(map, { roughness = 0.95, color = '#ffffff' } = {}) {
+  return new THREE.MeshStandardMaterial({ map, roughness, color, vertexColors: true });
+}
+
+/** Painted lines for one road segment between two intersections. */
+function markSegment(paint, along, across, from, to) {
+  // `along`/`across` swap x and z so the same code paints both road directions.
+  const strip = (a0, a1, c0, c1, color) => {
+    const [x0, z0] = along === 'z' ? [c0, a0] : [a0, c0];
+    const [x1, z1] = along === 'z' ? [c1, a1] : [a1, c1];
+    paint.flat(Math.min(x0, x1), Math.min(z0, z1), Math.max(x0, x1), Math.max(z0, z1), 0.012, { color });
+  };
+  const c = across;
+  strip(from + 4, to - 4, c - 0.25, c - 0.1, YELLOW);
+  strip(from + 4, to - 4, c + 0.1, c + 0.25, YELLOW);
+  for (const lane of [-3.6, 3.6]) {
+    for (let t = from + 6; t + 3 < to - 5; t += 7) strip(t, t + 3, c + lane - 0.07, c + lane + 0.07, WHITE);
   }
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.wrapS = THREE.RepeatWrapping;
-  texture.wrapT = THREE.RepeatWrapping;
-  texture.repeat.set(repeat, repeat);
-  texture.colorSpace = THREE.SRGBColorSpace;
-  texture.anisotropy = 8;
-  return texture;
-}
-
-function sidewalkTexture() {
-  const texture = noiseTexture('#c9c2b5', [['rgba(0,0,0,0.06)', 1400, 2], ['rgba(255,255,255,0.08)', 900, 2]], 256, 16, 7);
-  const ctx = texture.image.getContext('2d');
-  ctx.strokeStyle = 'rgba(70,60,50,0.28)';
-  ctx.lineWidth = 2;
-  for (let k = 0; k <= 256; k += 64) {
-    ctx.beginPath(); ctx.moveTo(k, 0); ctx.lineTo(k, 256); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(0, k); ctx.lineTo(256, k); ctx.stroke();
+  // zebra crossings and stop lines at both ends
+  for (const [edge, dir] of [[from, 1], [to, -1]]) {
+    for (let s = -GRID.road / 2 + 0.8; s < GRID.road / 2 - 0.5; s += 1.3) strip(edge + dir * 0.6, edge + dir * 3.2, c + s, c + s + 0.65, WHITE);
+    const stop = edge + dir * 3.9;
+    const side = dir > 0 ? [c - GRID.road / 2 + 0.6, c - 0.4] : [c + 0.4, c + GRID.road / 2 - 0.6];
+    strip(Math.min(stop, stop + dir * 0.45), Math.max(stop, stop + dir * 0.45), side[0], side[1], WHITE);
   }
-  return texture;
 }
 
-/** A flat instanced decal (lane line, crosswalk stripe) list from [x, z, length along x, length along z]. */
-function decals(list, color, y) {
-  const geometry = new THREE.PlaneGeometry(1, 1);
-  geometry.rotateX(-Math.PI / 2);
-  const material = new THREE.MeshStandardMaterial({ color, roughness: 0.8, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
-  const mesh = new THREE.InstancedMesh(geometry, material, list.length);
-  const matrix = new THREE.Matrix4();
-  list.forEach(([x, z, sx, sz], index) => {
-    matrix.makeScale(sx, 1, sz);
-    matrix.setPosition(x, y, z);
-    mesh.setMatrixAt(index, matrix);
-  });
-  mesh.receiveShadow = true;
-  return mesh;
-}
-
-function laneMarkings() {
-  const yellow = [];
-  const white = [];
-  const stripes = [];
-  const halfRoad = CITY.road / 2;
-  for (let i = 0; i <= CITY.blocks; i += 1) {
-    const c = roadCenter(i);
-    for (let j = 0; j < CITY.blocks; j += 1) {
-      const from = roadCenter(j) + halfRoad + 3;
-      const to = roadCenter(j + 1) - halfRoad - 3;
-      const mid = (from + to) / 2;
-      const length = to - from;
-      // Double yellow centre line on both axes.
-      for (const side of [-0.18, 0.18]) {
-        yellow.push([c + side, mid, 0.14, length]);
-        yellow.push([mid, c + side, length, 0.14]);
-      }
-      // Dashed white lane dividers.
-      for (let s = from + 1.5; s < to - 1.5; s += 6) {
-        for (const lane of [-4, 4]) {
-          white.push([c + lane, s, 0.14, 3]);
-          white.push([s, c + lane, 3, 0.14]);
-        }
-      }
-    }
-    // Crosswalks on every approach of every intersection.
-    for (let k = 0; k <= CITY.blocks; k += 1) {
-      const cx = roadCenter(i);
-      const cz = roadCenter(k);
-      for (let s = -halfRoad + 1; s <= halfRoad - 1; s += 1.25) {
-        if (k > 0) stripes.push([cx + s, cz - halfRoad - 1.6, 0.6, 2.8]);
-        if (k < CITY.blocks) stripes.push([cx + s, cz + halfRoad + 1.6, 0.6, 2.8]);
-        if (i > 0) stripes.push([cx - halfRoad - 1.6, cz + s, 2.8, 0.6]);
-        if (i < CITY.blocks) stripes.push([cx + halfRoad + 1.6, cz + s, 2.8, 0.6]);
-      }
-    }
-  }
-  return [decals(yellow, '#e8b923', 0.015), decals(white, '#e9e9e4', 0.015), decals(stripes, '#efefe9', 0.016)];
-}
-
-function park(block, materials, group) {
-  const inner = CITY.block - CITY.sidewalk * 2;
-  const cx = (block.x0 + block.x1) / 2;
-  const cz = (block.z0 + block.z1) / 2;
-  const grass = new THREE.Mesh(new THREE.BoxGeometry(inner, 0.1, inner), materials.grass);
-  grass.position.set(cx, CITY.curb + 0.05, cz);
-  grass.receiveShadow = true;
-  group.add(grass);
-  for (const [w, d] of [[inner, 3.2], [3.2, inner]]) {
-    const path = new THREE.Mesh(new THREE.BoxGeometry(w, 0.12, d), materials.path);
-    path.position.set(cx, CITY.curb + 0.06, cz);
-    path.receiveShadow = true;
-    group.add(path);
-  }
-  const basin = new THREE.Mesh(new THREE.CylinderGeometry(5.5, 5.8, 0.7, 28), materials.stone);
-  basin.position.set(cx, CITY.curb + 0.35, cz);
-  basin.castShadow = true;
-  basin.receiveShadow = true;
-  const water = new THREE.Mesh(new THREE.CylinderGeometry(5, 5, 0.1, 28), materials.fountain);
-  water.position.set(cx, CITY.curb + 0.62, cz);
-  const column = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.8, 2.4, 12), materials.stone);
-  column.position.set(cx, CITY.curb + 1.2, cz);
-  column.castShadow = true;
-  const bowl = new THREE.Mesh(new THREE.CylinderGeometry(1.8, 0.6, 0.5, 18), materials.stone);
-  bowl.position.set(cx, CITY.curb + 2.5, cz);
-  bowl.castShadow = true;
-  group.add(basin, water, column, bowl);
-}
-
-/** Asphalt, sidewalks, parks, markings and edge barriers as one group. */
-export function buildStreets(layout) {
+export function buildStreets(plan) {
   const group = new THREE.Group();
   group.name = 'streets';
-  const materials = {
-    asphalt: new THREE.MeshStandardMaterial({ map: noiseTexture('#45474c', [['rgba(255,255,255,0.05)', 2600, 2], ['rgba(0,0,0,0.12)', 1800, 3]], 256, 70, 3), roughness: 0.93 }),
-    sidewalk: new THREE.MeshStandardMaterial({ map: sidewalkTexture(), roughness: 0.9 }),
-    grass: new THREE.MeshStandardMaterial({ map: noiseTexture('#5f9a46', [['rgba(30,70,20,0.25)', 3000, 3], ['rgba(190,220,120,0.18)', 2000, 2]], 256, 10, 11), roughness: 1 }),
-    path: new THREE.MeshStandardMaterial({ color: '#d8cdb5', roughness: 0.95 }),
-    stone: new THREE.MeshStandardMaterial({ color: '#e7e0d2', roughness: 0.8 }),
-    fountain: new THREE.MeshStandardMaterial({ color: '#4fb6d8', roughness: 0.1, metalness: 0.3 }),
-    barrier: new THREE.MeshStandardMaterial({ color: '#bdb8ae', roughness: 0.9 }),
-    land: new THREE.MeshStandardMaterial({ color: '#8a9563', roughness: 1 }),
-  };
 
-  const land = new THREE.Mesh(new THREE.PlaneGeometry(4000, 4000), materials.land);
-  land.rotation.x = -Math.PI / 2;
-  land.position.y = -0.06;
-  land.receiveShadow = true;
-  group.add(land);
+  // One asphalt sheet under the whole grid.
+  const asphalt = asphaltTexture();
+  asphalt.repeat.set(CITY_SIZE / 10, CITY_SIZE / 10);
+  const road = new THREE.Mesh(new THREE.PlaneGeometry(CITY_SIZE, CITY_SIZE), new THREE.MeshStandardMaterial({ map: asphalt, roughness: 0.9 }));
+  road.rotation.x = -Math.PI / 2;
+  road.receiveShadow = true;
+  group.add(road);
 
-  const asphalt = new THREE.Mesh(new THREE.PlaneGeometry(HALF * 2, HALF * 2), materials.asphalt);
-  asphalt.rotation.x = -Math.PI / 2;
-  asphalt.receiveShadow = true;
-  group.add(asphalt);
+  // Scrub and dunes beyond the city limits, slightly lower so the asphalt never fights it.
+  const scrubTex = grassTexture();
+  scrubTex.repeat.set(160, 160);
+  const scrub = new THREE.Mesh(new THREE.PlaneGeometry(3200, 3200), new THREE.MeshStandardMaterial({ map: scrubTex, color: '#c7b27d', roughness: 1 }));
+  scrub.rotation.x = -Math.PI / 2;
+  scrub.position.set(CITY_HALF - 1600, -0.05, 0);
+  scrub.receiveShadow = true;
+  group.add(scrub);
 
-  const slab = new THREE.BoxGeometry(CITY.block, CITY.curb, CITY.block);
-  for (const block of layout.blocks) {
-    const mesh = new THREE.Mesh(slab, materials.sidewalk);
-    mesh.position.set((block.x0 + block.x1) / 2, CITY.curb / 2, (block.z0 + block.z1) / 2);
-    mesh.receiveShadow = true;
-    group.add(mesh);
-    if (block.kind === 'park') park(block, materials, group);
+  // Sidewalk slabs, kerbs and block interiors.
+  const walk = new MeshBuilder();
+  const lawn = new MeshBuilder();
+  const yard = new MeshBuilder();
+  const h = GRID.curb;
+  const sw = GRID.sidewalk;
+  for (const b of plan.blocks) {
+    walk.box((b.x0 + b.x1) / 2, h / 2, (b.z0 + b.z1) / 2, GRID.block, h, GRID.block, { skip: ['bottom'], tile: [3, 3], faceColors: { front: CURB_SIDE, back: CURB_SIDE, left: CURB_SIDE, right: CURB_SIDE } });
+    const inner = [b.x0 + sw, b.z0 + sw, b.x1 - sw, b.z1 - sw];
+    if (b.park || b.kind === 'heights') lawn.flat(...inner, h + 0.01, { tile: [6, 6] });
+    else if (b.kind === 'docks') yard.flat(...inner, h + 0.005, { tile: [7, 7], color: new THREE.Color('#9a958c') });
   }
+  // The promenade between Marisol Drive and the sand.
+  walk.box(CITY_HALF + 3, h / 2, 0, 6, h, CITY_SIZE, { skip: ['bottom'], tile: [3, 3] });
 
-  group.add(...laneMarkings());
+  const pave = pavementTexture();
+  group.add(walk.mesh(material(pave), { shadows: false }));
+  group.add(lawn.mesh(material(grassTexture()), { shadows: false }));
+  group.add(yard.mesh(material(pave, { color: '#bdb6aa' }), { shadows: false }));
 
-  const length = HALF * 2 + COAST.sandWidth;
-  for (const [x, z, w, d] of [
-    [-HALF - 0.6, 0, 1.2, HALF * 2],
-    [COAST.sandWidth / 2, -HALF - 0.6, length, 1.2],
-    [COAST.sandWidth / 2, HALF + 0.6, length, 1.2],
-  ]) {
-    const wall = new THREE.Mesh(new THREE.BoxGeometry(w, 1.1, d), materials.barrier);
-    wall.position.set(x, 0.55, z);
-    wall.castShadow = true;
-    wall.receiveShadow = true;
-    group.add(wall);
+  // Sand from the promenade to the surf, sloping under the water line.
+  const sandTex = sandTexture();
+  sandTex.repeat.set(SHORE.sand / 6, (CITY_SIZE + 400) / 6);
+  const sandGeo = new THREE.PlaneGeometry(SHORE.sand + 40, CITY_SIZE + 400, 24, 1);
+  const pos = sandGeo.attributes.position;
+  for (let i = 0; i < pos.count; i += 1) {
+    const local = pos.getX(i) + (SHORE.sand + 40) / 2; // 0 at the promenade edge
+    pos.setZ(i, local < SHORE.sand - 20 ? 0.02 : 0.02 - ((local - (SHORE.sand - 20)) / 20) * 0.9);
   }
+  sandGeo.computeVertexNormals();
+  const sand = new THREE.Mesh(sandGeo, new THREE.MeshStandardMaterial({ map: sandTex, roughness: 1 }));
+  sand.rotation.x = -Math.PI / 2;
+  sand.position.set(CITY_HALF + 6 + (SHORE.sand + 40) / 2 - 6, 0, 0);
+  sand.receiveShadow = true;
+  group.add(sand);
+
+  // Road paint.
+  const paint = new MeshBuilder();
+  for (let i = 0; i <= GRID.blocks; i += 1) {
+    for (let b = 0; b < GRID.blocks; b += 1) {
+      const from = blockStart(b);
+      const to = from + GRID.block;
+      markSegment(paint, 'z', roadCentre(i), from, to);
+      markSegment(paint, 'x', roadCentre(i), from, to);
+    }
+  }
+  const paintMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.7, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
+  group.add(paint.mesh(paintMat, { shadows: false }));
   return group;
 }

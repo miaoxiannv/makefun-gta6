@@ -3,79 +3,78 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Port Solano — Sun. Sand. Sirens.</title>
+<title>Port Solano · Sun. Sand. Sirens.</title>
 <script type="importmap">{ "imports": { "three": "./vendor/three.min.js" } }</script>
 <link rel="stylesheet" href="./styles.css">
 </head>
 <body>
-<canvas id="scene" aria-label="Port Solano: an open city to explore on foot and by car"></canvas>
+<canvas id="scene" aria-label="Port Solano, an open city to explore on foot and by car"></canvas>
 
 <div id="hud" hidden>
-  <div id="radar">
-    <canvas id="minimap" width="224" height="224"></canvas>
-    <div id="vitals"><div class="bar"><i id="health-fill"></i></div></div>
-    <div id="location"><b id="street">Solano Blvd</b><span id="district">Solano Center</span></div>
-  </div>
+  <section id="radar-box">
+    <canvas id="minimap" width="220" height="220"></canvas>
+    <div class="health"><i id="health-fill"></i></div>
+    <p id="place"><b id="street">Solano Blvd</b><span id="district">Solano Center</span></p>
+  </section>
 
-  <div id="status-panel">
-    <div id="clock">16:30</div>
-    <div id="money">$250</div>
+  <section id="stats">
+    <div id="clock">16:15</div>
+    <div id="money">$350</div>
     <div id="wanted" aria-label="wanted level"><i>★</i><i>★</i><i>★</i><i>★</i><i>★</i></div>
-  </div>
+  </section>
 
-  <div id="objective">
-    <h3 id="objective-title">Free roam</h3>
+  <section id="objective">
+    <h3 id="objective-title"></h3>
     <p id="objective-text"></p>
-  </div>
+  </section>
 
-  <div id="speedo" hidden>
+  <section id="speedo" hidden>
     <div class="dial"><span id="speed-needle"></span></div>
-    <b id="speed">0</b><span class="unit">km/h</span>
+    <b id="speed">0</b><small>km/h</small>
     <em id="vehicle-name"></em>
-  </div>
+  </section>
 
   <div id="prompt" hidden></div>
   <div id="toast"></div>
   <div id="damage-flash"></div>
 
-  <div id="help">
-    <h4>Controls <small>H to hide</small></h4>
+  <aside id="help">
+    <h4>Controls <small>H hides this</small></h4>
     <ul>
-      <li><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> move / drive</li>
-      <li><kbd>Shift</kbd> run · <kbd>Space</kbd> jump / handbrake</li>
-      <li><kbd>E</kbd> get in / out of a car</li>
-      <li><kbd>Q</kbd><kbd>E</kbd> or drag mouse: camera · wheel: zoom</li>
+      <li><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> walk / drive</li>
+      <li><kbd>Shift</kbd> sprint · <kbd>Space</kbd> jump / handbrake</li>
+      <li><kbd>E</kbd> steal a car / get out</li>
+      <li><kbd>Q</kbd> <kbd>E</kbd> or drag: look · wheel: zoom</li>
       <li><kbd>Esc</kbd> pause</li>
     </ul>
-  </div>
+  </aside>
 </div>
 
 <div id="title-screen" hidden>
-  <div class="title-card">
+  <div class="card">
     <p class="kicker">An open-world crime story</p>
-    <h1><span>PORT</span><span>SOLANO</span></h1>
+    <h1><span>Port</span><span>Solano</span></h1>
     <p class="tagline">Sun. Sand. Sirens.</p>
-    <div class="menu">
+    <nav>
       <button id="start-button" type="button">Start game</button>
       <button id="controls-button" type="button">Controls</button>
-    </div>
+    </nav>
     <div id="title-controls">
-      <p><kbd>W A S D</kbd> walk / drive · <kbd>Shift</kbd> run · <kbd>Space</kbd> jump / handbrake</p>
-      <p><kbd>E</kbd> steal or leave a car · <kbd>Q</kbd>/<kbd>E</kbd> or mouse drag to look · <kbd>Esc</kbd> pause</p>
+      <p><kbd>W A S D</kbd> walk / drive · <kbd>Shift</kbd> sprint · <kbd>Space</kbd> jump / handbrake</p>
+      <p><kbd>E</kbd> steal or leave a car · <kbd>Q</kbd>/<kbd>E</kbd> or drag to look · <kbd>Esc</kbd> pause</p>
     </div>
-    <p class="press">Press <kbd>Enter</kbd> to start</p>
+    <p class="press">Press <kbd>Enter</kbd></p>
   </div>
 </div>
 
 <div id="pause-screen" hidden>
-  <div class="title-card small">
+  <div class="card small">
     <h2>Paused</h2>
-    <button id="resume-button" type="button">Resume</button>
-    <p class="press">Press <kbd>Esc</kbd> to resume</p>
+    <nav><button id="resume-button" type="button">Resume</button></nav>
+    <p class="press"><kbd>Esc</kbd> to resume</p>
   </div>
 </div>
 
-<p id="status" role="status" aria-live="polite"></p>
 <script type="module" src="./src/main.js"></script>
 </body>
 </html>

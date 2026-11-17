@@ -1,58 +1,44 @@
-// The screenshot scenes behind ?shot=drive|foot|night|title. Each one starts a fresh session,
-// sets the clock and plays the real simulation forward for a fixed number of steps with
-// scripted controls, so the same seed always gives the same frame.
-import { STEP } from './config.js';
-import { IDLE_CONTROLS } from './game.js';
+// The deterministic screenshot scenes behind ?shot=<name>. Each starts from a fresh session,
+// sets the clock and runs the real simulation forward with scripted controls, so a given seed
+// always produces the same frame. tools/shoot.ts captures them for the screenshots/ folder.
 
-const STILL_MOUSE = { dragX: 0, dragY: 0, wheel: 0 };
-
-/** Step the game `seconds` forward with `controls` (a function of elapsed time or an object). */
-function play(game, seconds, controls) {
-  const steps = Math.round(seconds / STEP);
-  for (let k = 0; k < steps; k += 1) {
-    const now = typeof controls === 'function' ? controls(k * STEP) : controls;
-    game.step(STEP, { ...IDLE_CONTROLS, ...now });
-    game.followCamera.update(STEP, game.focus(), STILL_MOUSE, now.turn ?? 0, game.colliders);
-  }
-}
-
-const SCENES = {
-  /** Cover: racing the Kestrel GT down Solano Blvd through downtown at golden hour. */
+export const SHOTS = {
+  /** Cover: the red Vela GT tearing up Solano Blvd through downtown at golden hour. */
   drive(game) {
-    game.state.hour = 17.35;
+    game.state.hour = 17.1;
     const car = game.starterCar;
-    car.placeAt(-2, -60, 0);
+    car.placeAt(3.5, 90, Math.PI);
     game.enterCar(car);
-    game.followCamera.snap(game.focus(), Math.PI - 0.35, 0.16);
-    play(game, 2.6, { throttle: 1 });
+    game.chase.snap(game.focus(), Math.PI - 0.32, 0.17, game.collision);
+    game.simulate(3.2, (t) => ({ throttle: 1, steer: t > 2.4 ? 0.12 : 0 }));
   },
-  /** On foot, walking up to the parked sports car with the steal prompt showing. */
+  /** On foot on the downtown sidewalk, walking up to the parked line-up with the steal prompt. */
   foot(game) {
-    game.state.hour = 10.6;
-    game.player.placeAt(10.5, -44, 0, 0.18);
-    game.followCamera.snap(game.focus(), Math.PI + 0.55, 0.16);
-    // Camera-relative input that walks straight along the sidewalk (+z) with the camera off to the side.
-    play(game, 2.3, { moveY: 0.85, moveX: 0.52 });
+    game.state.hour = 10.4;
+    game.player.placeAt(10.6, -21, Math.PI, game.collision.groundHeight(10.6, -21));
+    game.chase.snap(game.focus(), Math.PI + 0.6, 0.16, game.collision);
+    // camera-relative input that walks straight up the sidewalk (north) toward the parked line-up
+    game.simulate(2.0, { moveY: Math.cos(0.6), moveX: Math.sin(0.6) });
   },
-  /** Night run in a cab: lit windows, street lamps and headlights. */
+  /** A cab ride after dark: lit windows, glowing lamps, headlights on the asphalt. */
   night(game) {
-    game.state.hour = 21.4;
-    const cab = game.fleet.cars[2];
-    game.player.placeAt(cab.position.x - 2, cab.position.z, 0, 0);
+    game.state.hour = 21.3;
+    const cab = game.garage.cars[2];
+    cab.placeAt(-3.5, -150, 0);
     game.enterCar(cab);
-    game.followCamera.snap(game.focus(), 0.25, 0.22);
-    play(game, 3.2, (t) => ({ throttle: 1, steer: t > 1.6 && t < 2.4 ? -0.35 : 0 }));
+    game.chase.snap(game.focus(), 0.3, 0.2, game.collision);
+    game.simulate(3.0, { throttle: 1 });
   },
-  /** The title screen over the sunset skyline. */
+  /** The title card over the skyline at sunset. */
   title(game) {
-    game.state.hour = 18.4;
+    game.state.hour = 18.5;
     game.time = 0;
   },
 };
 
-/** Stage the named scene; returns true when the title screen should be shown over it. */
+/** Stage scene `name` on `game`. Returns true when it is the title screen. */
 export function stageShot(name, game) {
-  const scene = SCENES[name] ?? SCENES.title;
+  const scene = SHOTS[name] ?? SHOTS.title;
   scene(game);
-  return scene === SCENES.title;
+  return scene === SHOTS.title;
 }

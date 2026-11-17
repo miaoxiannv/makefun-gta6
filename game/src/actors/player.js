@@ -1,93 +1,85 @@
-// The player on foot: camera-relative walking and running, jumping with gravity, turning to
-// face the way they move, collision with buildings and cars, and the walk animation.
+// The player on foot: camera-relative walking and sprinting with acceleration, turning to face
+// the way they move, jumping with gravity, stepping up kerbs, and being pushed out of walls
+// and cars. When they get into a car, the car takes over and this just rides along.
 import * as THREE from 'three';
-import { PLAYER } from '../config.js';
-import { damp, lerpAngle } from '../core/math.js';
-import { buildCharacter, poseCharacter } from './character-model.js';
+import { WALKER } from '../config.js';
+import { approachAngle, damp } from '../core/rng.js';
+import { PersonModel } from './person-model.js';
 
 export class Player {
   constructor() {
-    const { root, rig } = buildCharacter({ skin: '#c98d62', shirt: '#f2f2ee', pants: '#3a5f8f', shoes: '#e24b3b', hair: '#1d1611' });
-    // A loud floral-print overshirt look: open shirt panels over the white tee.
-    const print = new THREE.MeshStandardMaterial({ color: '#2bb3a3', roughness: 0.8 });
-    for (const side of [-1, 1]) {
-      const panel = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.5, 0.26), print);
-      panel.position.set(side * 0.16, 0.27, 0.005);
-      panel.castShadow = true;
-      rig.chest.add(panel);
-    }
-    for (const arm of rig.arms) arm.shoulder.children[0].material = print;
-    this.model = root;
-    this.rig = rig;
+    this.model = new PersonModel();
     this.position = new THREE.Vector3();
     this.velocity = new THREE.Vector3();
     this.heading = 0;
-    this.grounded = true;
+    this.onGround = true;
     this.phase = 0;
-    this.stride = 0;
-    this.time = 0;
+    this.gait = 0;
     this.vehicle = null;
+    this.time = 0;
   }
 
-  placeAt(x, z, heading, ground = 0) {
-    this.position.set(x, ground, z);
+  get object() {
+    return this.model.root;
+  }
+
+  placeAt(x, z, heading, y = 0) {
+    this.position.set(x, y, z);
     this.velocity.set(0, 0, 0);
     this.heading = heading;
-    this.syncModel();
+    this.onGround = true;
+    this.sync();
   }
 
   /**
-   * Walk for one step. `controls` = { moveX, moveY, run, jump }, `cameraYaw` orients them;
-   * `world` offers resolveCircle, groundHeight and pushOutOfCars.
+   * One step. `controls.moveX/moveY` are -1..1 relative to the camera, whose yaw is `yaw`
+   * (the direction the camera looks along the ground). `world` answers collision questions.
    */
-  update(dt, controls, cameraYaw, world) {
+  update(dt, controls, yaw, world) {
     this.time += dt;
-    const forwardX = -Math.sin(cameraYaw);
-    const forwardZ = -Math.cos(cameraYaw);
-    const rightX = Math.cos(cameraYaw);
-    const rightZ = -Math.sin(cameraYaw);
-    let dirX = forwardX * controls.moveY + rightX * controls.moveX;
-    let dirZ = forwardZ * controls.moveY + rightZ * controls.moveX;
-    const length = Math.hypot(dirX, dirZ);
-    const speed = length > 0 ? (controls.run ? PLAYER.runSpeed : PLAYER.walkSpeed) : 0;
-    if (length > 0) {
-      dirX /= length;
-      dirZ /= length;
-      this.heading = lerpAngle(this.heading, Math.atan2(dirX, dirZ), damp(PLAYER.turnRate, dt));
-    }
-    const grip = this.grounded ? 12 : 2.5;
-    this.velocity.x += (dirX * speed - this.velocity.x) * damp(grip, dt);
-    this.velocity.z += (dirZ * speed - this.velocity.z) * damp(grip, dt);
+    const fx = Math.sin(yaw);
+    const fz = Math.cos(yaw);
+    // camera right = forward rotated -90 degrees about y
+    let wx = fx * controls.moveY - fz * controls.moveX;
+    let wz = fz * controls.moveY + fx * controls.moveX;
+    const len = Math.hypot(wx, wz);
+    if (len > 1) { wx /= len; wz /= len; }
+    const speed = controls.run ? WALKER.sprint : WALKER.walk;
 
-    if (controls.jump && this.grounded) {
-      this.velocity.y = PLAYER.jumpSpeed;
-      this.grounded = false;
+    const k = damp(this.onGround ? WALKER.accel / speed : 1.5, dt);
+    this.velocity.x += (wx * speed - this.velocity.x) * k;
+    this.velocity.z += (wz * speed - this.velocity.z) * k;
+    if (len > 0.1) this.heading = approachAngle(this.heading, Math.atan2(wx, wz), WALKER.turn * dt);
+
+    if (controls.jump && this.onGround) {
+      this.velocity.y = WALKER.jump;
+      this.onGround = false;
     }
-    this.velocity.y -= PLAYER.gravity * dt;
+    this.velocity.y -= WALKER.gravity * dt;
     this.position.addScaledVector(this.velocity, dt);
 
-    world.resolveCircle(this.position, PLAYER.radius);
-    world.pushOutOfCars(this.position, PLAYER.radius);
+    world.resolveCircle(this.position, WALKER.radius);
+    world.pushOutOfCars(this.position, WALKER.radius);
     const ground = world.groundHeight(this.position.x, this.position.z);
-    const stepDown = this.grounded && this.velocity.y <= 0 && this.position.y - ground < 0.25;
-    if (this.position.y <= ground || stepDown) {
-      // Landed, or stepping up or down a kerb.
+    if (this.position.y <= ground + 0.02 || (this.onGround && this.position.y - ground < 0.35)) {
+      // landing, or stepping up/down a kerb while walking
       this.position.y = ground;
-      this.velocity.y = 0;
-      this.grounded = true;
+      if (this.velocity.y < 0) this.velocity.y = 0;
+      this.onGround = true;
     } else {
-      this.grounded = false;
+      this.onGround = false;
     }
 
-    const planar = Math.hypot(this.velocity.x, this.velocity.z);
-    this.stride += (Math.min(1, planar / PLAYER.runSpeed) - this.stride) * damp(10, dt);
-    this.phase += planar * dt * 1.6;
-    this.syncModel();
+    const flat = Math.hypot(this.velocity.x, this.velocity.z);
+    this.gait = flat < 0.2 ? 0 : flat <= WALKER.walk ? flat / WALKER.walk : 1 + (flat - WALKER.walk) / (WALKER.sprint - WALKER.walk);
+    this.phase += dt * flat * 2.1;
+    this.sync();
   }
 
-  syncModel() {
-    this.model.position.copy(this.position);
-    this.model.rotation.y = this.heading;
-    poseCharacter(this.rig, { phase: this.phase, stride: this.stride, airborne: !this.grounded, time: this.time });
+  sync() {
+    const root = this.model.root;
+    root.position.copy(this.position);
+    root.rotation.y = this.heading;
+    this.model.pose(this.phase, this.gait, !this.onGround, this.time);
   }
 }

@@ -1,71 +1,64 @@
-// Keyboard and mouse state: held keys, keys pressed since they were last consumed,
-// mouse-drag deltas for the camera and the wheel for zoom.
-
-const GAME_KEYS = new Set([
-  'KeyW', 'KeyA', 'KeyS', 'KeyD', 'KeyE', 'KeyF', 'KeyQ', 'KeyH', 'Space',
-  'ShiftLeft', 'ShiftRight', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight',
-]);
+// Keyboard and mouse state. Keys are tracked by `KeyboardEvent.code`, so the layout of the
+// player's keyboard does not matter. Presses are latched until consumed, which means a tap
+// shorter than a frame is never lost. Mouse drags and the wheel accumulate between frames.
 
 export class Input {
   constructor(surface) {
     this.held = new Set();
     this.pressed = new Set();
-    this.dragX = 0;
-    this.dragY = 0;
-    this.wheel = 0;
+    this.look = { x: 0, y: 0, wheel: 0 };
     this.dragging = false;
 
-    window.addEventListener('keydown', (event) => {
-      if (!event.repeat) this.pressed.add(event.code);
-      this.held.add(event.code);
-      if (GAME_KEYS.has(event.code)) event.preventDefault();
+    window.addEventListener('keydown', (e) => {
+      if (e.repeat) return;
+      this.held.add(e.code);
+      this.pressed.add(e.code);
+      if (e.code === 'Space' || e.code.startsWith('Arrow')) e.preventDefault();
     });
-    window.addEventListener('keyup', (event) => this.held.delete(event.code));
+    window.addEventListener('keyup', (e) => this.held.delete(e.code));
     window.addEventListener('blur', () => this.held.clear());
 
-    surface.addEventListener('pointerdown', (event) => {
+    surface.addEventListener('pointerdown', (e) => {
       this.dragging = true;
-      surface.setPointerCapture(event.pointerId);
+      surface.setPointerCapture?.(e.pointerId);
     });
-    surface.addEventListener('pointermove', (event) => {
-      if (!this.dragging) return;
-      this.dragX += event.movementX;
-      this.dragY += event.movementY;
+    window.addEventListener('pointerup', () => (this.dragging = false));
+    window.addEventListener('pointermove', (e) => {
+      if (!this.dragging && document.pointerLockElement !== surface) return;
+      this.look.x += e.movementX;
+      this.look.y += e.movementY;
     });
-    const release = () => { this.dragging = false; };
-    surface.addEventListener('pointerup', release);
-    surface.addEventListener('pointercancel', release);
-    surface.addEventListener('wheel', (event) => {
-      this.wheel += Math.sign(event.deltaY);
-      event.preventDefault();
+    surface.addEventListener('wheel', (e) => {
+      this.look.wheel += Math.sign(e.deltaY);
+      e.preventDefault();
     }, { passive: false });
+    surface.addEventListener('contextmenu', (e) => e.preventDefault());
   }
 
-  isHeld(...codes) {
-    return codes.some((code) => this.held.has(code));
+  isDown(...codes) {
+    return codes.some((c) => this.held.has(c));
   }
 
-  /** True once per key press: the press is used up by whoever asks first. */
-  consume(code) {
-    if (!this.pressed.has(code)) return false;
-    this.pressed.delete(code);
-    return true;
+  /** True once per press of any of the codes. */
+  take(...codes) {
+    let hit = false;
+    for (const c of codes) if (this.pressed.delete(c)) hit = true;
+    return hit;
   }
 
   /** -1, 0 or 1 from a pair of key groups. */
   axis(negative, positive) {
-    return (this.isHeld(...positive) ? 1 : 0) - (this.isHeld(...negative) ? 1 : 0);
+    return (this.isDown(...positive) ? 1 : 0) - (this.isDown(...negative) ? 1 : 0);
   }
 
-  /** Read and reset the mouse movement gathered since the last frame. */
-  takeMouse() {
-    const result = { dragX: this.dragX, dragY: this.dragY, wheel: this.wheel, dragging: this.dragging };
-    this.dragX = 0;
-    this.dragY = 0;
-    this.wheel = 0;
-    return result;
+  /** Hand over the mouse movement gathered since the last call. */
+  takeLook() {
+    const look = { ...this.look };
+    this.look.x = this.look.y = this.look.wheel = 0;
+    return look;
   }
 
+  /** Forget presses nobody asked about this frame. */
   endFrame() {
     this.pressed.clear();
   }

@@ -1,263 +1,249 @@
-// The game session: builds Port Solano, owns the player, cars, camera, HUD and clock, turns
-// keyboard and mouse into controls, runs the fixed-step simulation and renders each frame.
+// A session of Port Solano. Builds the city and everything in it, owns the player, the cars,
+// the camera, the clock and the HUD, and runs it all: fixed-step simulation (walk, drive,
+// pick up cash, get hurt, get patched up), then lighting for the hour, the HUD and the render.
 import * as THREE from 'three';
-import { CITY, CLOCK, PLAYER, START, STEP } from './config.js';
-import { buildCityLayout, districtAt, streetAt } from './city/layout.js';
-import { CityColliders } from './city/colliders.js';
-import { BuildingSet } from './city/buildings.js';
+import { CHASE_CAM, CLOCK, DRIVING, GRID, HOSPITAL, PLAYER_START, STEP, WALKER } from './config.js';
+import { buildPlan, districtAt, streetAt } from './city/plan.js';
+import { CityCollision } from './city/collision.js';
+import { Buildings } from './city/buildings.js';
 import { buildStreets } from './city/streets.js';
-import { StreetProps } from './city/street-props.js';
+import { StreetProps } from './city/props.js';
 import { Sky } from './world/sky.js';
-import { Coast } from './world/coast.js';
-import { SkyEnvironment } from './world/environment.js';
+import { Ocean } from './world/ocean.js';
 import { CashDrops } from './world/cash-drops.js';
-import { Fleet } from './vehicles/fleet.js';
+import { Garage } from './vehicles/garage.js';
 import { Player } from './actors/player.js';
-import { FollowCamera } from './camera/follow-camera.js';
+import { ChaseCamera } from './camera/chase-camera.js';
 import { Hud } from './ui/hud.js';
-import { Minimap } from './ui/minimap.js';
-
-/** Where a new game starts: the sidewalk on Solano Blvd, downtown, by a parked sports car. */
-export const SPAWN = { x: 10.5, z: -40, heading: -Math.PI / 2, cameraYaw: Math.PI / 2 + 0.5 };
-const HOSPITAL = { x: -90, z: 10 };
+import { Radar } from './ui/radar.js';
+import { NO_CONTROLS, readControls } from './controls.js';
 
 const FREE_ROAM = {
-  title: 'Free roam',
-  text: 'Explore Port Solano. Grab the green $ cash drops on the radar, and take any parked car with E.',
+  title: 'Welcome to Port Solano',
+  text: 'Fresh off the bus with $350 and no plan. Take any parked car with <kbd>E</kbd> and grab the <b class="cash">$</b> cash drops on the radar.',
 };
-
-export const IDLE_CONTROLS = Object.freeze({ moveX: 0, moveY: 0, run: false, jump: false, throttle: 0, brake: 0, steer: 0, handbrake: false, interact: false, turn: 0 });
 
 export class Game {
   constructor(renderer, { seed = 1 } = {}) {
     this.renderer = renderer;
     this.scene = new THREE.Scene();
-    this.camera = new THREE.PerspectiveCamera(62, 16 / 9, 0.2, 2200);
-    this.layout = buildCityLayout(CITY.seed);
-    this.colliders = new CityColliders(this.layout);
+    this.camera = new THREE.PerspectiveCamera(CHASE_CAM.fov, 16 / 9, 0.25, 2400);
 
-    this.buildings = new BuildingSet(this.layout);
-    this.props = new StreetProps(this.layout);
-    this.scene.add(buildStreets(this.layout), this.buildings.group, this.props.group);
-    this.sky = new Sky(this.scene);
-    this.coast = new Coast(this.scene);
-    this.environment = new SkyEnvironment(renderer, this.scene);
-    this.scene.environmentIntensity = 0.7;
-    this.cash = new CashDrops(this.scene, this.layout.cashSpots);
+    this.plan = buildPlan(GRID.seed);
+    this.collision = new CityCollision(this.plan);
+    this.buildings = new Buildings(this.plan);
+    this.props = new StreetProps(this.plan, this.collision);
+    this.scene.add(buildStreets(this.plan), this.buildings.group, this.props.group);
+    this.sky = new Sky(renderer, this.scene);
+    this.ocean = new Ocean(this.scene);
+    this.cash = new CashDrops(this.scene, this.plan.cash);
 
-    this.fleet = new Fleet(this.scene);
+    this.garage = new Garage(this.scene);
     this.parkCars(seed);
     this.player = new Player();
-    this.scene.add(this.player.model);
-    this.followCamera = new FollowCamera(this.camera);
-    this.makeHeadlights();
+    this.scene.add(this.player.object);
+    this.chase = new ChaseCamera(this.camera);
+    this.headlights = this.makeHeadlights();
 
     this.hud = new Hud();
-    this.minimap = new Minimap(document.getElementById('minimap'), this.layout);
+    this.radar = new Radar(document.getElementById('minimap'), this.plan);
 
+    // what the player and the cars ask of the world
     this.world = {
-      resolveCircle: (point, radius) => this.colliders.resolveCircle(point, radius),
-      groundHeight: (x, z) => this.colliders.groundHeight(x, z),
-      pushOutOfCars: (point, radius) => this.fleet.pushOutOfCars(point, radius),
+      resolveCircle: (p, r) => this.collision.resolveCircle(p, r),
+      groundHeight: (x, z) => this.collision.groundHeight(x, z),
+      pushOutOfCars: (p, r) => this.garage.pushOutOfCars(p, r),
     };
-    this.state = { health: START.health, money: START.money, hour: CLOCK.startHour, wanted: 0, objective: FREE_ROAM };
+    this.state = { health: PLAYER_START.health, cash: PLAYER_START.cash, hour: CLOCK.start, wanted: 0, objective: FREE_ROAM };
     this.time = 0;
-    this.accumulator = 0;
+    this.carry = 0;
+    this.frames = 0;
     this.mode = 'title';
-    this.eLocked = false;
-    this.lighting = null;
-    this.spawnPlayer();
+    this.day = null;
+    this.spawn();
   }
 
-  /** The showcase cars by the spawn point, then the kerbside cars everywhere else. */
+  /** A showcase line-up by the bus stop on Solano Blvd, then cars at the kerbs all over town. */
   parkCars(seed) {
-    this.starterCar = this.fleet.add('sports', '#e8443a', 6.6, -34, 0);
-    this.fleet.add('suv', '#f7f4ee', 6.6, -52, 0);
-    this.fleet.add('taxi', null, -6.6, -24, Math.PI);
-    const clear = (spot) => Math.hypot(spot.x - 0, spot.z + 40) > 26;
-    this.fleet.parkAlongKerbs({ parking: this.layout.parking.filter(clear) }, seed * 7919 + 3);
+    const kerb = GRID.road / 2 - 1.6;
+    this.starterCar = this.garage.add('coupe', '#e3342f', kerb, -30, Math.PI);
+    this.garage.add('suv', '#f4f1ea', kerb, -50, Math.PI);
+    this.garage.add('cab', null, -kerb, -22, 0);
+    const clear = (s) => Math.hypot(s.x, s.z + 36) > 30;
+    this.garage.parkAlongKerbs(this.plan.parking, seed * 7907 + 1, clear);
   }
 
-  spawnPlayer() {
-    this.player.placeAt(SPAWN.x, SPAWN.z, SPAWN.heading, CITY.curb);
-    this.followCamera.snap(this.focus(), SPAWN.cameraYaw, 0.24);
+  spawn() {
+    const s = PLAYER_START;
+    this.player.placeAt(s.x, s.z, s.heading, GRID.curb);
+    this.chase.snap(this.focus(), s.heading + s.yaw, 0.2, this.collision);
   }
 
+  /** Two spotlights that ride on whichever car the player is driving. */
   makeHeadlights() {
-    this.headlights = [-1, 1].map(() => {
-      const light = new THREE.SpotLight('#fff1cf', 0, 60, 0.5, 0.45, 1.2);
-      light.castShadow = false;
-      return light;
-    });
+    const rig = new THREE.Group();
+    for (const side of [-1, 1]) {
+      const light = new THREE.SpotLight('#fff1d0', 0, 70, 0.52, 0.5, 1.1);
+      light.position.set(side * 0.7, 0.75, 2.2);
+      light.target.position.set(side * 1.2, 0, 24);
+      rig.add(light, light.target);
+    }
+    this.scene.add(rig);
+    return rig;
   }
 
-  /** The thing the camera, radar and HUD follow: the player or the car they drive. */
+  /** What the camera, radar and HUD follow: the player, or the car they drive. */
   focus() {
     const car = this.player.vehicle;
     if (car) return { position: car.position, heading: car.heading, inCar: true, speed: car.forwardSpeed };
     return { position: this.player.position, heading: this.player.heading, inCar: false, speed: 0 };
   }
 
-  /** Turn held keys into this frame's controls. */
-  readControls(input) {
-    const moveY = input.axis(['KeyS', 'ArrowDown'], ['KeyW', 'ArrowUp']);
-    const moveX = input.axis(['KeyA', 'ArrowLeft'], ['KeyD', 'ArrowRight']);
-    const interact = input.consume('KeyE') || input.consume('KeyF');
-    if (interact) this.eLocked = true;
-    if (!input.isHeld('KeyE')) this.eLocked = false;
-    const nearCar = !this.player.vehicle && this.fleet.nearest(this.player.position.x, this.player.position.z, PLAYER.enterRange);
-    const turnRight = input.isHeld('KeyE') && !this.eLocked && !nearCar;
-    return {
-      moveX,
-      moveY,
-      run: input.isHeld('ShiftLeft', 'ShiftRight'),
-      jump: input.consume('Space'),
-      throttle: moveY > 0 ? 1 : 0,
-      brake: moveY < 0 ? 1 : 0,
-      steer: -moveX,
-      handbrake: input.isHeld('Space'),
-      interact,
-      turn: (turnRight ? 1 : 0) - (input.isHeld('KeyQ') ? 1 : 0),
-    };
+  nearbyCar() {
+    if (this.player.vehicle) return null;
+    return this.garage.nearest(this.player.position.x, this.player.position.z, WALKER.reach);
   }
 
   enterCar(car) {
     car.driver = this.player;
     car.asleep = false;
     this.player.vehicle = car;
-    this.player.model.visible = false;
-    for (const [index, light] of this.headlights.entries()) {
-      light.position.set((index ? 1 : -1) * car.type.width * 0.33, 0.7, car.type.length / 2);
-      light.target.position.set((index ? 1 : -1) * 1.5, 0, car.type.length / 2 + 20);
-      car.model.add(light, light.target);
-    }
+    this.player.object.visible = false;
     this.hud.toast(`You took the <b>${car.label}</b>`);
   }
 
   exitCar() {
     const car = this.player.vehicle;
-    const acrossX = Math.cos(car.heading);
-    const acrossZ = -Math.sin(car.heading);
-    const reach = car.type.width / 2 + 0.7;
-    let spot = null;
-    for (const side of [1, -1]) {
-      const p = { x: car.position.x + acrossX * reach * side, z: car.position.z + acrossZ * reach * side };
-      const push = this.colliders.resolveCircle({ ...p }, PLAYER.radius);
-      if (Math.hypot(push.x, push.z) < 0.05) { spot = p; break; }
-    }
-    spot ??= { x: car.position.x + Math.sin(car.heading) * (car.type.length / 2 + 1), z: car.position.z + Math.cos(car.heading) * (car.type.length / 2 + 1) };
+    const s = Math.sin(car.heading);
+    const c = Math.cos(car.heading);
+    const reach = car.type.width / 2 + 0.75;
+    // driver's door first (left of the nose), then the passenger side, then behind the car
+    const options = [
+      { x: car.position.x + c * reach, z: car.position.z - s * reach },
+      { x: car.position.x - c * reach, z: car.position.z + s * reach },
+      { x: car.position.x - s * (car.type.length / 2 + 1), z: car.position.z - c * (car.type.length / 2 + 1) },
+    ];
+    const free = options.find((p) => !this.collision.resolveCircle({ ...p }, WALKER.radius)) ?? options[2];
     car.driver = null;
-    for (const light of this.headlights) car.model.remove(light, light.target);
     this.player.vehicle = null;
-    this.player.model.visible = true;
-    this.player.placeAt(spot.x, spot.z, car.heading, this.colliders.groundHeight(spot.x, spot.z));
-    this.followCamera.yaw = car.heading + Math.PI;
+    this.player.object.visible = true;
+    this.player.placeAt(free.x, free.z, car.heading, this.collision.groundHeight(free.x, free.z));
   }
 
-  /** One fixed simulation step with the given controls. */
+  /** One fixed simulation step. */
   step(dt, controls) {
     this.time += dt;
-    this.state.hour = (this.state.hour + (dt * CLOCK.minutesPerSecond) / 60) % 24;
-    const car = this.player.vehicle;
+    this.state.hour = (this.state.hour + (dt * CLOCK.rate) / 60) % 24;
 
     if (controls.interact) {
-      if (car) {
-        if (Math.abs(car.forwardSpeed) < 6) this.exitCar();
-      } else {
-        const target = this.fleet.nearest(this.player.position.x, this.player.position.z, PLAYER.enterRange);
-        if (target) this.enterCar(target);
+      const car = this.player.vehicle;
+      if (car && Math.abs(car.forwardSpeed) < DRIVING.exitSpeed) this.exitCar();
+      else if (!car) {
+        const near = this.nearbyCar();
+        if (near) this.enterCar(near);
       }
     }
 
     const driving = this.player.vehicle;
-    if (!driving) this.player.update(dt, controls, this.followCamera.yaw, this.world);
-    this.fleet.update(dt, this.world, driving, driving ? controls : null);
+    if (!driving) this.player.update(dt, controls, this.chase.yaw, this.world);
+    this.garage.update(dt, this.world, driving, driving ? controls : null);
     if (driving) {
       this.player.position.copy(driving.position);
       this.player.heading = driving.heading;
-      if (driving.lastImpact > 9) this.hurt((driving.lastImpact - 9) * 2.4);
+      if (driving.lastImpact > DRIVING.hurtImpact) this.hurt((driving.lastImpact - DRIVING.hurtImpact) * 2.2);
+      if (driving.lastImpact > 4) this.chase.shake = Math.min(1.4, this.chase.shake + driving.lastImpact * 0.06);
     }
 
     const at = this.focus().position;
-    const found = this.cash.update(dt, this.time, at.x, at.z, driving ? 1.5 : 0);
-    if (found > 0) {
-      this.state.money += found;
+    const found = this.cash.update(dt, this.time, at.x, at.z, driving ? 1.6 : 0);
+    if (found) {
+      this.state.cash += found;
       this.hud.toast(`<b class="cash">+$${found}</b> cash drop`);
     }
   }
 
   hurt(amount) {
     this.state.health -= amount;
-    this.hud.damageFlash();
-    this.followCamera.shake = Math.min(1.5, this.followCamera.shake + amount * 0.08);
+    this.hud.hurt();
     if (this.state.health > 0) return;
     if (this.player.vehicle) this.exitCar();
-    this.state.health = START.health;
-    const bill = Math.min(this.state.money, 100);
-    this.state.money -= bill;
-    this.player.placeAt(HOSPITAL.x, HOSPITAL.z, 0, CITY.curb);
-    this.followCamera.snap(this.focus(), Math.PI);
-    this.hud.toast(`<b>Patched up</b> at Solano General · hospital bill $${bill}`, 4);
+    const fee = Math.min(this.state.cash, HOSPITAL.fee);
+    this.state.cash -= fee;
+    this.state.health = PLAYER_START.health;
+    this.player.placeAt(HOSPITAL.x, HOSPITAL.z, Math.PI / 2, GRID.curb);
+    this.chase.snap(this.focus(), Math.PI / 2, 0.25, this.collision);
+    this.hud.toast(`Patched up at <b>${HOSPITAL.name}</b> · bill $${fee}`, 4);
   }
 
-  /** Run as many fixed steps as `frameDt` covers, then move the camera and draw. */
+  /** A real frame of play: read input, run the fixed steps, move the camera, draw. */
   frame(frameDt, input) {
     const dt = Math.min(frameDt, 0.1);
-    if (input.consume('KeyH')) this.hud.toggleHelp();
-    const controls = this.readControls(input);
-    this.accumulator += dt;
+    this.frames += 1;
+    if (input.take('KeyH')) this.hud.toggleHelp();
+    const near = this.nearbyCar();
+    const controls = readControls(input, { nearCar: !!near, inCar: !!this.player.vehicle });
+    this.carry += dt;
     let first = true;
-    while (this.accumulator >= STEP) {
+    while (this.carry >= STEP) {
       this.step(STEP, first ? controls : { ...controls, interact: false, jump: false });
       first = false;
-      this.accumulator -= STEP;
+      this.carry -= STEP;
     }
-    this.followCamera.update(dt, this.focus(), input.takeMouse(), controls.turn, this.colliders);
+    this.chase.update(dt, this.focus(), input.takeLook(), controls.turn, this.collision);
     this.present(dt);
   }
 
-  /** Slow aerial orbit over downtown behind the title screen. */
+  /** Step the simulation with scripted controls (the ?shot= autopilot). */
+  simulate(seconds, controls) {
+    const steps = Math.round(seconds / STEP);
+    const still = { x: 0, y: 0, wheel: 0 };
+    for (let k = 0; k < steps; k += 1) {
+      const c = typeof controls === 'function' ? controls(k * STEP) : controls;
+      this.step(STEP, { ...NO_CONTROLS, ...c });
+      this.chase.update(STEP, this.focus(), still, c.turn ?? 0, this.collision);
+    }
+  }
+
+  /** The slow aerial orbit behind the title screen. */
   attract(frameDt) {
     this.time += frameDt;
-    const angle = this.time * 0.03 + 0.2;
-    this.camera.position.set(60 + Math.cos(angle) * 330, 105, Math.sin(angle) * 330);
-    this.camera.lookAt(-10, 20, -20);
+    const a = this.time * 0.025 + 2.6;
+    this.camera.position.set(40 + Math.cos(a) * 300, 95, -20 + Math.sin(a) * 300);
+    this.camera.lookAt(20, 25, -10);
     this.present(frameDt, false);
   }
 
-  /** Lighting, HUD, radar and the render itself. */
+  /** Light the scene for the hour, update the HUD and radar, render. */
   present(dt, withHud = true) {
     const focus = this.focus();
-    this.lighting = this.sky.update(this.state.hour, focus.position, this.camera.position);
-    this.environment.update(this.state.hour, this.lighting);
-    const night = this.lighting.night;
-    this.buildings.setNight(night);
-    this.props.setNight(night);
-    this.coast.update(this.time, this.lighting, this.scene.fog);
-    for (const light of this.headlights) light.intensity = 40 * Math.max(0.15, night);
-    this.renderer.toneMappingExposure = 1.05 - night * 0.15;
+    this.day = this.sky.update(this.state.hour, focus.position, this.camera.position);
+    const night = this.day.night;
+    this.buildings.update(night, this.time);
+    this.props.update(night);
+    this.ocean.update(this.time, this.day);
+    this.garage.setLights(night);
+    this.renderer.toneMappingExposure = 1.0 - night * 0.1;
+
+    const car = this.player.vehicle;
+    for (const light of this.headlights.children) if (light.isSpotLight) light.intensity = car ? 30 + 90 * night : 0;
+    if (car) {
+      this.headlights.position.copy(car.position);
+      this.headlights.rotation.y = car.heading;
+    }
 
     if (withHud) {
-      const near = !this.player.vehicle && this.fleet.nearest(this.player.position.x, this.player.position.z, PLAYER.enterRange);
-      const prompt = this.player.vehicle
-        ? (Math.abs(this.player.vehicle.forwardSpeed) < 6 ? '<kbd>E</kbd> Get out' : null)
-        : near ? `<kbd>E</kbd> Take the ${near.label}` : null;
+      const near = this.nearbyCar();
+      let prompt = null;
+      if (car && Math.abs(car.forwardSpeed) < DRIVING.exitSpeed) prompt = '<kbd>E</kbd> Get out';
+      else if (near) prompt = `<kbd>E</kbd> Steal the ${near.label}`;
       this.hud.update(dt, {
         ...this.state,
         street: streetAt(focus.position.x, focus.position.z),
         district: districtAt(focus.position.x, focus.position.z),
-        vehicle: this.player.vehicle,
+        vehicle: car,
         prompt,
       });
-      this.minimap.draw({
-        x: focus.position.x,
-        z: focus.position.z,
-        yaw: this.followCamera.yaw,
-        heading: focus.heading,
-        inCar: focus.inCar,
-        cars: this.fleet.cars,
-        cash: this.cash.drops,
-      });
+      this.radar.draw({ x: focus.position.x, z: focus.position.z, yaw: this.chase.yaw, heading: focus.heading, inCar: focus.inCar, cars: this.garage.cars, cash: this.cash.drops });
     }
     this.renderer.render(this.scene, this.camera);
   }
