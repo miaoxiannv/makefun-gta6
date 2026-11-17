@@ -1,2 +1,3 @@
-out/
+# build output and dependencies
 node_modules/
+out/
