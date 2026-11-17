@@ -1,0 +1,6 @@
+[
+  { "name": "1-drive.jpg", "query": "?shot=drive&seed=1" },
+  { "name": "2-foot.jpg", "query": "?shot=foot&seed=1" },
+  { "name": "3-night.jpg", "query": "?shot=night&seed=1" },
+  { "name": "4-title.jpg", "query": "?shot=title&seed=1" }
+]
