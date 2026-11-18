@@ -77,3 +77,60 @@ export const PLAYER_START = { cash: 350, health: 100, x: 12.5, z: -36, heading: 
 export const HOSPITAL = { name: 'Solano Mercy Hospital', x: -168, z: -10, fee: 150 };
 
 export const CASH_DROPS = { count: 24, min: 50, max: 260, respawn: 75, radius: 1.5 };
+
+/** The cars that drive themselves: how many, how fast, how far they stay from the player. */
+export const TRAFFIC = {
+  count: 14,
+  cruiseMin: 9,
+  cruiseMax: 14,
+  /** A car farther than this from the player is moved to a road near the player. */
+  respawnDist: 350,
+  respawnNearMin: 60,
+  respawnNearMax: 120,
+};
+
+/** The people on the sidewalks: how many, how fast, how they behave. */
+export const PEDESTRIANS = {
+  count: 22,
+  walkMin: 1.0,
+  walkMax: 1.5,
+  run: 3.6,
+  /** A pedestrian farther than this from the player is moved to a sidewalk near the player. */
+  respawnDist: 220,
+  respawnNearMin: 40,
+  respawnNearMax: 90,
+};
+
+/** The wanted level: 0..5 stars, earned by crime, lost by staying out of sight. */
+export const WANTED = {
+  max: 5,
+  /** Seconds after the last crime before a star can drop. */
+  crimeCooldown: 10,
+  /** Seconds out of a cruiser's close sight before a star can drop. */
+  unseenSeconds: 5,
+  /** How close a cruiser must be to count as seeing the player. */
+  seenRadius: 25,
+};
+
+/** Solano PD: how many cars chase, how fast, how a bust works. */
+export const POLICE = {
+  maxActive: 3,
+  spawnDistMin: 70,
+  spawnDistMax: 110,
+  /** Trail stays warm this long after the last crime (cruisers keep coming). */
+  spawnWarmSeconds: 30,
+  /** ...or this long after a cruiser last saw the player up close. */
+  spawnSeenSeconds: 15,
+  /** A cruiser that cannot get this close to the player gives up after the time below. */
+  giveUpSeconds: 15,
+  giveUpRadius: 12,
+  /** The player is reachable by car this far from a road centre line (kerbside on foot). */
+  roadReach: 10,
+  /** Seconds pinned by a police car (slow, or on foot) before the bust lands. */
+  bustSeconds: 2.5,
+  bustFine: 200,
+  /** Speed (m/s) over which driving past the police earns heat. */
+  speedLimit: 25,
+  ramCooldown: 5,
+  speedCooldown: 10,
+};

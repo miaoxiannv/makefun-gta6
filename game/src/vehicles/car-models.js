@@ -15,6 +15,8 @@ export const CAR_TYPES = {
   cab: { label: 'Sol Cab', length: 4.8, width: 1.92, sill: 0.32, belt: 0.95, roof: 1.52, c0: -1.6, c1: 1.0, r0: -1.25, r1: 0.45, wheel: 0.36, axle: 1.5, top: 44, power: 10, grip: 8, lock: 0.55, mass: 1.25, colours: ['#f7c51e'], sign: true, checker: true },
   suv: { label: 'Cayo Ridge', length: 4.9, width: 2.05, sill: 0.48, belt: 1.18, roof: 1.85, c0: -2.1, c1: 1.15, r0: -2.15, r1: 0.65, wheel: 0.44, axle: 1.55, top: 42, power: 9.5, grip: 7.5, lock: 0.5, mass: 1.6, colours: ['#f4f1ea', '#203040', '#8a2b2b', '#566b3d', '#3d3d40', '#b4a48a'] },
   pickup: { label: 'Tarpon 1500', length: 5.3, width: 2.05, sill: 0.5, belt: 1.15, roof: 1.85, c0: -0.4, c1: 1.2, r0: -0.35, r1: 0.75, wheel: 0.45, axle: 1.75, top: 40, power: 9, grip: 7, lock: 0.48, mass: 1.7, colours: ['#2b5d8a', '#b93a2a', '#e8e4da', '#3b3b3b', '#6f7d3f'], bed: true },
+  /** Solano PD's interceptor: quick, heavy, and impossible to miss once the bar flashes. */
+  police: { label: 'Solano PD Interceptor', length: 4.8, width: 1.95, sill: 0.32, belt: 0.95, roof: 1.5, c0: -1.6, c1: 1.0, r0: -1.25, r1: 0.45, wheel: 0.36, axle: 1.5, top: 52, power: 14, grip: 8.5, lock: 0.55, mass: 1.3, colours: ['#eef0f2'], lightbar: true },
 };
 
 const TRIM = new THREE.Color('#202224');

@@ -2,7 +2,7 @@
 // the camera, the clock and the HUD, and runs it all: fixed-step simulation (walk, drive,
 // pick up cash, get hurt, get patched up), then lighting for the hour, the HUD and the render.
 import * as THREE from 'three';
-import { CHASE_CAM, CLOCK, DRIVING, GRID, HOSPITAL, PLAYER_START, STEP, WALKER } from './config.js';
+import { CHASE_CAM, CLOCK, DRIVING, GRID, HOSPITAL, PLAYER_START, POLICE, STEP, WALKER } from './config.js';
 import { buildPlan, districtAt, streetAt } from './city/plan.js';
 import { CityCollision } from './city/collision.js';
 import { Buildings } from './city/buildings.js';
@@ -12,7 +12,10 @@ import { Sky } from './world/sky.js';
 import { Ocean } from './world/ocean.js';
 import { CashDrops } from './world/cash-drops.js';
 import { Garage } from './vehicles/garage.js';
+import { Traffic } from './vehicles/traffic.js';
 import { Player } from './actors/player.js';
+import { Pedestrians } from './actors/pedestrians.js';
+import { Police } from './actors/police.js';
 import { ChaseCamera } from './camera/chase-camera.js';
 import { Hud } from './ui/hud.js';
 import { Radar } from './ui/radar.js';
@@ -20,7 +23,7 @@ import { NO_CONTROLS, readControls } from './controls.js';
 
 const FREE_ROAM = {
   title: 'Welcome to Port Solano',
-  text: 'Fresh off the bus with $350 and no plan. Take any parked car with <kbd>E</kbd> and grab the <b class="cash">$</b> cash drops on the radar.',
+  text: 'Fresh off the bus with $350 and no plan. Take any parked car with <kbd>E</kbd> — jacking one in front of Solano PD earns stars. Grab the <b class="cash">$</b> cash drops on the radar.',
 };
 
 export class Game {
@@ -55,6 +58,11 @@ export class Game {
       pushOutOfCars: (p, r) => this.garage.pushOutOfCars(p, r),
     };
     this.state = { health: PLAYER_START.health, cash: PLAYER_START.cash, hour: CLOCK.start, wanted: 0, objective: FREE_ROAM };
+    this.traffic = new Traffic(this.scene, this.garage, this.plan, seed, { x: PLAYER_START.x, z: PLAYER_START.z });
+    this.pedestrians = new Pedestrians(this.scene, this.plan, seed);
+    this.police = new Police(this.scene, this.garage, this.state, seed, (html, s) => this.hud.toast(html, s));
+    this.busted = false;
+    this.bustedFine = 0;
     this.time = 0;
     this.carry = 0;
     this.frames = 0;
@@ -105,11 +113,29 @@ export class Game {
   }
 
   enterCar(car) {
+    if (car.ai === 'traffic') {
+      // jacking a car somebody is driving earns a star on the spot
+      this.traffic.release(car);
+      this.police.addHeat(1);
+      this.hud.toast(`You jacked the <b>${car.label}</b> — the cops noticed`);
+    } else if (car.ai === 'police') {
+      this.police.release(car);
+      this.police.addHeat(2);
+      this.hud.toast(`You jacked a <b>Solano PD cruiser</b> — big mistake`);
+    } else {
+      // a parked car: only heat if a cruiser is close enough to see it
+      const seen = this.police.cars.some((e) => Math.hypot(e.car.position.x - car.position.x, e.car.position.z - car.position.z) < 50);
+      if (seen) {
+        this.police.addHeat(1);
+        this.hud.toast(`You took the <b>${car.label}</b> — Solano PD saw that`);
+      } else {
+        this.hud.toast(`You took the <b>${car.label}</b>`);
+      }
+    }
     car.driver = this.player;
     car.asleep = false;
     this.player.vehicle = car;
     this.player.object.visible = false;
-    this.hud.toast(`You took the <b>${car.label}</b>`);
   }
 
   exitCar() {
@@ -145,8 +171,18 @@ export class Game {
     }
 
     const driving = this.player.vehicle;
-    if (!driving) this.player.update(dt, controls, this.chase.yaw, this.world);
+    if (!driving) {
+      this.player.update(dt, controls, this.chase.yaw, this.world);
+      this.pedestrians.pushOut(this.player.position, WALKER.radius);
+    }
+    this.pedestrians.update(dt, this.time, this.world, this.garage.cars, this.player, () => {
+      this.police.addHeat(1);
+      this.hud.toast('You ran someone over — wanted up');
+    });
+    this.traffic.update(dt, this.world, this.pedestrians, this.player);
     this.garage.update(dt, this.world, driving, driving ? controls : null);
+    this.police.update(dt, this.world, this.focus(), this.player);
+    if (this.police.bustReady) this.enterBusted();
     if (driving) {
       this.player.position.copy(driving.position);
       this.player.heading = driving.heading;
@@ -173,6 +209,34 @@ export class Game {
     this.player.placeAt(HOSPITAL.x, HOSPITAL.z, Math.PI / 2, GRID.curb);
     this.chase.snap(this.focus(), Math.PI / 2, 0.25, this.collision);
     this.hud.toast(`Patched up at <b>${HOSPITAL.name}</b> · bill $${fee}`, 4);
+  }
+
+  /** The bust lands: freeze the game behind the busted screen; fine and respawn on release. */
+  enterBusted() {
+    if (this.busted) return;
+    this.busted = true;
+    this.police.bustReady = false;
+    this.mode = 'busted';
+    this.bustedFine = Math.min(this.state.cash, POLICE.bustFine);
+    this.screens?.showBusted(true, this.bustedFine);
+    this.hud.show(false);
+  }
+
+  /** Walk free: pay the bail, clear the stars, wake up at Solano Mercy. */
+  releaseBusted() {
+    if (!this.busted) return;
+    this.busted = false;
+    this.mode = 'play';
+    this.state.cash -= this.bustedFine;
+    this.state.wanted = 0;
+    this.police.clearAll();
+    if (this.player.vehicle) this.exitCar();
+    this.state.health = PLAYER_START.health;
+    this.player.placeAt(HOSPITAL.x, HOSPITAL.z, Math.PI / 2, GRID.curb);
+    this.chase.snap(this.focus(), Math.PI / 2, 0.25, this.collision);
+    this.screens?.showBusted(false);
+    this.hud.show(true);
+    this.hud.toast(`Solano PD let you go · bail $${this.bustedFine}`, 4);
   }
 
   /** A real frame of play: read input, run the fixed steps, move the camera, draw. */
@@ -243,8 +307,9 @@ export class Game {
         vehicle: car,
         prompt,
       });
-      this.radar.draw({ x: focus.position.x, z: focus.position.z, yaw: this.chase.yaw, heading: focus.heading, inCar: focus.inCar, cars: this.garage.cars, cash: this.cash.drops });
+      this.radar.draw({ x: focus.position.x, z: focus.position.z, yaw: this.chase.yaw, heading: focus.heading, inCar: focus.inCar, cars: this.garage.cars.filter((c) => c.ai !== 'police'), cash: this.cash.drops, police: this.police.cars.map((e) => e.car), time: this.time });
     }
+    for (const car of this.garage.cars) if (car.typeName === 'police') car.flashLights(this.time);
     this.renderer.render(this.scene, this.camera);
   }
 

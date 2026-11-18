@@ -20,10 +20,25 @@ export class Car {
     this.roll = 0;
     this.pitch = 0;
     this.driver = null;
+    this.ai = null; // 'traffic' | 'police' when an AI system drives this car, else null
     this.asleep = true;
     this.lastImpact = 0;
     this.braking = false;
     this.radius = this.type.width / 2;
+    this.lightRed = null;
+    this.lightBlue = null;
+    if (this.type.lightbar) {
+      // the red/blue bar on the roof of a Solano PD cruiser
+      const bar = (x, color) => {
+        const mat = new THREE.MeshStandardMaterial({ color: '#202224', emissive: color, emissiveIntensity: 0.2, roughness: 0.4 });
+        const mesh = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.14, 0.32), mat);
+        mesh.position.set(x, this.type.roof + 0.1, (this.type.r0 + this.type.r1) / 2);
+        this.model.chassis.add(mesh);
+        return mat;
+      };
+      this.lightRed = bar(-0.35, '#ff2211');
+      this.lightBlue = bar(0.35, '#2266ff');
+    }
     this.sync();
   }
 
@@ -149,12 +164,21 @@ export class Car {
     return impact;
   }
 
-  /** Lamps: headlights at night when someone drives; brake lights on braking. */
+  /** Lamps: headlights at night when someone drives; brake lights on braking. AI cars count as driven. */
   setLights(night) {
     const m = this.model;
-    const on = this.driver ? Math.max(0.25, night) : 0;
+    const driven = this.driver || this.ai;
+    const on = driven ? Math.max(0.25, night) : 0;
     m.headMat.emissiveIntensity = on * 3;
-    m.tailMat.emissiveIntensity = (this.driver ? 0.6 + night * 0.8 : 0) + (this.braking && this.driver ? 2.2 : 0);
+    m.tailMat.emissiveIntensity = (driven ? 0.6 + night * 0.8 : 0) + (this.braking && driven ? 2.2 : 0);
+  }
+
+  /** Alternate the red and blue light bar (police cars only). */
+  flashLights(time) {
+    if (!this.lightRed) return;
+    const phase = Math.floor(time * 5) % 2 === 0;
+    this.lightRed.emissiveIntensity = phase ? 3 : 0.15;
+    this.lightBlue.emissiveIntensity = phase ? 0.15 : 3;
   }
 
   sync() {

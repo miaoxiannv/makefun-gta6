@@ -44,9 +44,9 @@ export class Radar {
 
   /**
    * Draw for a player at (x, z) facing `heading`, with the view turned to camera `yaw`.
-   * `blips` holds {cars, cash} lists.
+   * `blips` holds {cars, cash} lists, plus `police` cruisers (flashing red/blue) and `time`.
    */
-  draw({ x, z, yaw, heading, inCar, cars, cash }) {
+  draw({ x, z, yaw, heading, inCar, cars, cash, police = [], time = 0 }) {
     const { ctx, size } = this;
     const r = size / 2;
     const turn = -Math.PI / 2 - Math.atan2(Math.cos(yaw), Math.sin(yaw));
@@ -71,6 +71,15 @@ export class Radar {
       ctx.rotate(-car.heading);
       ctx.fillRect(-1, -2.2, 2, 4.4);
       ctx.restore();
+    }
+    // police cruisers flash red/blue on the radar
+    for (const car of police) {
+      const [dx, dz] = rel(car.position.x, car.position.z);
+      if (Math.abs(dx) > 130 || Math.abs(dz) > 130) continue;
+      ctx.fillStyle = Math.floor(time * 4) % 2 === 0 ? '#ff3b30' : '#2f7bff';
+      ctx.beginPath();
+      ctx.arc(dx, dz, 4, 0, Math.PI * 2);
+      ctx.fill();
     }
     ctx.restore();
 

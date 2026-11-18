@@ -41,13 +41,20 @@ export class Garage {
     return best;
   }
 
-  /** Step awake cars; `driven` gets the player's controls. */
+  /** Step awake cars; `driven` gets the player's controls. AI cars drive themselves. */
   update(dt, world, driven, controls) {
     for (const car of this.cars) {
       if (car === driven) car.update(dt, controls, world);
-      else if (!car.asleep) car.update(dt, null, world);
+      else if (!car.asleep && !car.ai) car.update(dt, null, world);
     }
     this.separate();
+  }
+
+  /** Take a car out of the world entirely (a police cruiser leaving, for instance). */
+  remove(car) {
+    const i = this.cars.indexOf(car);
+    if (i >= 0) this.cars.splice(i, 1);
+    this.scene.remove(car.object);
   }
 
   /** Circle-vs-circle contacts between moving cars and anything near them. */

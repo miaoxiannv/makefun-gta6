@@ -33,7 +33,7 @@ resize();
 const input = new Input(canvas);
 
 function setPaused(paused) {
-  if (game.mode === 'title') return;
+  if (game.mode === 'title' || game.mode === 'busted') return;
   game.mode = paused ? 'paused' : 'play';
   screens.showPause(paused);
 }
@@ -48,7 +48,9 @@ const screens = new Screens({
     game.hud.toast('Welcome to <b>Port Solano</b>', 3);
   },
   onResume: () => setPaused(false),
+  onBusted: () => game.releaseBusted(),
 });
+game.screens = screens;
 window.addEventListener('keydown', (e) => {
   if (e.code === 'Escape' || e.code === 'KeyP') setPaused(game.mode === 'play');
 });
