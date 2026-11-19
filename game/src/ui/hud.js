@@ -70,7 +70,7 @@ export class Hud {
     this.shownMoney += Math.abs(diff) < 1 ? diff : diff * Math.min(1, dt * 6) + Math.sign(diff);
     this.set('money', 'text', `$${Math.round(this.shownMoney).toLocaleString('en-US')}`);
     this.set('clock', 'text', clockText(s.hour));
-    this.set('health', 'width', `${Math.max(0, s.health)}%`);
+    this.set('health', 'width', `${Math.max(0, (s.health / (s.maxHealth || 100)) * 100)}%`);
     this.el.stars.forEach((star, i) => star.classList.toggle('on', i < s.wanted));
     this.set('street', 'text', s.street);
     this.set('district', 'text', s.district);

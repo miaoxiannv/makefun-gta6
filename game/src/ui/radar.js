@@ -44,9 +44,10 @@ export class Radar {
 
   /**
    * Draw for a player at (x, z) facing `heading`, with the view turned to camera `yaw`.
-   * `blips` holds {cars, cash} lists, plus `police` cruisers (flashing red/blue) and `time`.
+   * `blips` holds {cars, cash} lists, plus `police` cruisers (flashing red/blue), the
+   * `mission` target (a gold diamond) and `enemies` (red dots), and `time`.
    */
-  draw({ x, z, yaw, heading, inCar, cars, cash, police = [], time = 0 }) {
+  draw({ x, z, yaw, heading, inCar, cars, cash, police = [], mission = null, enemies = [], time = 0 }) {
     const { ctx, size } = this;
     const r = size / 2;
     const turn = -Math.PI / 2 - Math.atan2(Math.cos(yaw), Math.sin(yaw));
@@ -81,6 +82,15 @@ export class Radar {
       ctx.arc(dx, dz, 4, 0, Math.PI * 2);
       ctx.fill();
     }
+    // rival crew: small red dots
+    ctx.fillStyle = '#ff2211';
+    for (const e of enemies) {
+      const [dx, dz] = rel(e.position.x, e.position.z);
+      if (Math.abs(dx) > 130 || Math.abs(dz) > 130) continue;
+      ctx.beginPath();
+      ctx.arc(dx, dz, 3, 0, Math.PI * 2);
+      ctx.fill();
+    }
     ctx.restore();
 
     // icons stay upright, so place them in screen space
@@ -97,6 +107,20 @@ export class Radar {
       const max = r - margin;
       return d > max ? [r + (dx / d) * max, r + (dy / d) * max, true] : [sx, sy, false];
     };
+    // the mission target: a gold diamond, clamped to the rim when far away
+    if (mission) {
+      const [mx, my, clamped] = edge(...toScreen(mission.x, mission.z), 12);
+      ctx.fillStyle = '#ffd54a';
+      ctx.strokeStyle = '#111';
+      ctx.lineWidth = 1.5;
+      ctx.save();
+      ctx.translate(mx, my);
+      ctx.rotate(Math.PI / 4);
+      const half = clamped ? 6 : 8;
+      ctx.fillRect(-half, -half, half * 2, half * 2);
+      ctx.strokeRect(-half, -half, half * 2, half * 2);
+      ctx.restore();
+    }
     for (const d of cash) {
       if (!d.active) continue;
       const [sx, sy] = toScreen(d.x, d.z);

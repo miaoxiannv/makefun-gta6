@@ -108,6 +108,21 @@ kbd {
 }
 .card button:first-child { background: linear-gradient(180deg, #ffe08a, var(--sun)); }
 .card button:hover { transform: translateY(-2px); }
+/* mission list on the title screen: one row per job, locked ones dimmed */
+#mission-list { display: flex; flex-direction: column; gap: 8px; margin: 20px auto 0; max-width: 420px; }
+#mission-list .job {
+  display: flex; justify-content: space-between; align-items: baseline; gap: 16px;
+  padding: 9px 16px; border-radius: 10px; text-transform: none; letter-spacing: 0;
+  font: 700 15px var(--hud-font); color: var(--ink);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(255, 217, 168, 0.92));
+  box-shadow: 0 3px 0 #b0466f, 0 6px 14px rgba(0, 0, 0, 0.35);
+}
+#mission-list .job span { font-weight: 400; font-size: 13px; color: #5a4a3a; white-space: nowrap; }
+#mission-list .job:disabled { opacity: 0.45; box-shadow: 0 3px 0 rgba(0, 0, 0, 0.3); cursor: default; transform: none; }
+#title-progress { margin: 14px 0 0; font-size: 14px; letter-spacing: 0.06em; color: #ffe6c2; text-shadow: 0 2px 4px #000; }
+#pause-stats { margin: 0 0 20px; font-size: 15px; line-height: 1.7; text-shadow: 0 2px 4px #000; }
+#pause-stats p { margin: 0; }
+
 #title-controls { max-height: 0; overflow: hidden; transition: max-height 0.3s; font-size: 15px; text-shadow: 0 2px 4px #000; }
 #title-controls.open { max-height: 120px; margin-top: 18px; }
 .press { margin-top: 24px; font-size: 15px; letter-spacing: 0.2em; text-transform: uppercase; opacity: 0.85; text-shadow: 0 2px 4px #000; animation: pulse 1.6s ease-in-out infinite; }

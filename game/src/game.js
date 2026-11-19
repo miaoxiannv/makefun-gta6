@@ -2,7 +2,7 @@
 // the camera, the clock and the HUD, and runs it all: fixed-step simulation (walk, drive,
 // pick up cash, get hurt, get patched up), then lighting for the hour, the HUD and the render.
 import * as THREE from 'three';
-import { CHASE_CAM, CLOCK, DRIVING, GRID, HOSPITAL, PLAYER_START, POLICE, STEP, WALKER } from './config.js';
+import { CHASE_CAM, CLOCK, COMBAT, DRIVING, ENEMIES, GRID, HOSPITAL, PLAYER_START, POLICE, STEP, WALKER } from './config.js';
 import { buildPlan, districtAt, streetAt } from './city/plan.js';
 import { CityCollision } from './city/collision.js';
 import { Buildings } from './city/buildings.js';
@@ -16,10 +16,14 @@ import { Traffic } from './vehicles/traffic.js';
 import { Player } from './actors/player.js';
 import { Pedestrians } from './actors/pedestrians.js';
 import { Police } from './actors/police.js';
+import { Enemies } from './actors/enemies.js';
 import { ChaseCamera } from './camera/chase-camera.js';
 import { Hud } from './ui/hud.js';
 import { Radar } from './ui/radar.js';
 import { NO_CONTROLS, readControls } from './controls.js';
+import { Missions } from './story/missions.js';
+import { Progression } from './story/progression.js';
+import { clearSave, writeSave } from './story/save.js';
 
 const FREE_ROAM = {
   title: 'Welcome to Port Solano',
@@ -57,12 +61,16 @@ export class Game {
       groundHeight: (x, z) => this.collision.groundHeight(x, z),
       pushOutOfCars: (p, r) => this.garage.pushOutOfCars(p, r),
     };
-    this.state = { health: PLAYER_START.health, cash: PLAYER_START.cash, hour: CLOCK.start, wanted: 0, objective: FREE_ROAM };
+    this.state = { health: PLAYER_START.health, maxHealth: PLAYER_START.health, cash: PLAYER_START.cash, hour: CLOCK.start, wanted: 0, objective: FREE_ROAM };
     this.traffic = new Traffic(this.scene, this.garage, this.plan, seed, { x: PLAYER_START.x, z: PLAYER_START.z });
     this.pedestrians = new Pedestrians(this.scene, this.plan, seed);
     this.police = new Police(this.scene, this.garage, this.state, seed, (html, s) => this.hud.toast(html, s));
+    this.enemies = new Enemies(this.scene);
+    this.progression = new Progression();
+    this.missions = new Missions(this.scene, this);
     this.busted = false;
     this.bustedFine = 0;
+    this.hospitalized = false;
     this.time = 0;
     this.carry = 0;
     this.frames = 0;
@@ -87,6 +95,83 @@ export class Game {
     this.chase.snap(this.focus(), s.heading + s.yaw, 0.2, this.collision);
   }
 
+  /** Load a save into this session: cash, health, finished jobs and unlocks. */
+  applySave(save) {
+    this.state.cash = save.cash;
+    this.state.maxHealth = save.maxHealth;
+    this.state.health = save.maxHealth;
+    this.progression.applySave(save);
+    this.missions.applySave(save);
+    if (this.progression.has('coupe')) this.spawnCoupe();
+  }
+
+  /** Write this session's progress to the save slot. */
+  saveProgress() {
+    writeSave({
+      cash: this.state.cash,
+      maxHealth: this.state.maxHealth,
+      ...this.missions.toSave(),
+      ...this.progression.toSave(),
+    });
+  }
+
+  /** Forget everything and start over (new game / reset). */
+  resetProgress() {
+    clearSave();
+    if (this.progression.coupeCar) {
+      this.garage.remove(this.progression.coupeCar);
+      this.progression.coupeCar = null;
+    }
+    this.state.cash = PLAYER_START.cash;
+    this.state.health = PLAYER_START.health;
+    this.state.maxHealth = PLAYER_START.health;
+    this.state.wanted = 0;
+    this.progression.reset();
+    this.missions.reset();
+    this.police.clearAll();
+    this.state.objective = FREE_ROAM;
+  }
+
+  /** Park the getaway coupe — the player's own yellow Vela GT — by the bus stop. */
+  spawnCoupe() {
+    if (this.progression.coupeCar) return;
+    const kerb = GRID.road / 2 - 1.6;
+    const car = this.garage.add('coupe', '#f5c518', kerb, -70, Math.PI);
+    this.progression.coupeCar = car;
+  }
+
+  /** A punch swing: what it hits in front of the player, crew first, bystanders second. */
+  resolvePunch() {
+    const p = this.player;
+    p.punch();
+    const damage = this.progression.punchDamage;
+    const fx = Math.sin(p.heading);
+    const fz = Math.cos(p.heading);
+    let hitAnyone = false;
+    for (const enemy of this.enemies.alive) {
+      const dx = enemy.position.x - p.position.x;
+      const dz = enemy.position.z - p.position.z;
+      const d = Math.hypot(dx, dz);
+      if (d > COMBAT.range || d < 1e-6) continue;
+      if ((dx * fx + dz * fz) / d < Math.cos(COMBAT.arc)) continue;
+      hitAnyone = true;
+      const ko = enemy.hit(damage, (dx / d) * COMBAT.knockback, (dz / d) * COMBAT.knockback);
+      if (ko) {
+        const prize = enemy.boss ? ENEMIES.bossCash : ENEMIES.koCash;
+        this.progression.stats.knockouts += 1;
+        this.state.cash += prize;
+        if (enemy.boss) this.hud.toast(`Boss down · <b class="cash">+$${prize}</b>`, 3);
+      }
+    }
+    if (!hitAnyone) {
+      const down = this.pedestrians.hitByPunch(p.position.x, p.position.z, p.heading, COMBAT.range, COMBAT.arc);
+      if (down > 0) {
+        this.police.addHeat(COMBAT.pedHeat);
+        this.hud.toast('You decked a bystander — wanted up');
+      }
+    }
+  }
+
   /** Two spotlights that ride on whichever car the player is driving. */
   makeHeadlights() {
     const rig = new THREE.Group();
@@ -105,6 +190,19 @@ export class Game {
     const car = this.player.vehicle;
     if (car) return { position: car.position, heading: car.heading, inCar: true, speed: car.forwardSpeed };
     return { position: this.player.position, heading: this.player.heading, inCar: false, speed: 0 };
+  }
+
+  /** A crew member or a bystander close enough to punch right now. */
+  foeInReach() {
+    const p = this.player.position;
+    const reach = COMBAT.range + 0.6;
+    for (const e of this.enemies.alive) {
+      if (Math.hypot(e.position.x - p.x, e.position.z - p.z) < reach) return true;
+    }
+    for (const ped of this.pedestrians.list) {
+      if (ped.state !== 'down' && Math.hypot(ped.position.x - p.x, ped.position.z - p.z) < reach) return true;
+    }
+    return false;
   }
 
   nearbyCar() {
@@ -171,9 +269,11 @@ export class Game {
     }
 
     const driving = this.player.vehicle;
+    if (controls.attack && !driving && this.player.attackCooldown <= 0) this.resolvePunch();
     if (!driving) {
       this.player.update(dt, controls, this.chase.yaw, this.world);
       this.pedestrians.pushOut(this.player.position, WALKER.radius);
+      this.enemies.pushOut(this.player.position, WALKER.radius);
     }
     this.pedestrians.update(dt, this.time, this.world, this.garage.cars, this.player, () => {
       this.police.addHeat(1);
@@ -182,6 +282,8 @@ export class Game {
     this.traffic.update(dt, this.world, this.pedestrians, this.player);
     this.garage.update(dt, this.world, driving, driving ? controls : null);
     this.police.update(dt, this.world, this.focus(), this.player);
+    this.enemies.update(dt, this.time, this.world, this.player, (dmg) => this.hurt(dmg));
+    this.missions.update(dt);
     if (this.police.bustReady) this.enterBusted();
     if (driving) {
       this.player.position.copy(driving.position);
@@ -205,7 +307,8 @@ export class Game {
     if (this.player.vehicle) this.exitCar();
     const fee = Math.min(this.state.cash, HOSPITAL.fee);
     this.state.cash -= fee;
-    this.state.health = PLAYER_START.health;
+    this.state.health = this.state.maxHealth;
+    this.hospitalized = true; // a mission running notices this and fails
     this.player.placeAt(HOSPITAL.x, HOSPITAL.z, Math.PI / 2, GRID.curb);
     this.chase.snap(this.focus(), Math.PI / 2, 0.25, this.collision);
     this.hud.toast(`Patched up at <b>${HOSPITAL.name}</b> · bill $${fee}`, 4);
@@ -217,6 +320,7 @@ export class Game {
     this.busted = true;
     this.police.bustReady = false;
     this.mode = 'busted';
+    this.missions.fail('busted');
     this.bustedFine = Math.min(this.state.cash, POLICE.bustFine);
     this.screens?.showBusted(true, this.bustedFine);
     this.hud.show(false);
@@ -231,7 +335,7 @@ export class Game {
     this.state.wanted = 0;
     this.police.clearAll();
     if (this.player.vehicle) this.exitCar();
-    this.state.health = PLAYER_START.health;
+    this.state.health = this.state.maxHealth;
     this.player.placeAt(HOSPITAL.x, HOSPITAL.z, Math.PI / 2, GRID.curb);
     this.chase.snap(this.focus(), Math.PI / 2, 0.25, this.collision);
     this.screens?.showBusted(false);
@@ -300,6 +404,8 @@ export class Game {
       let prompt = null;
       if (car && Math.abs(car.forwardSpeed) < DRIVING.exitSpeed) prompt = '<kbd>E</kbd> Get out';
       else if (near) prompt = `<kbd>E</kbd> Steal the ${near.label}`;
+      else if (!car && this.foeInReach()) prompt = '<kbd>F</kbd> Punch';
+      this.state.objective = this.missions.objective() ?? FREE_ROAM;
       this.hud.update(dt, {
         ...this.state,
         street: streetAt(focus.position.x, focus.position.z),
@@ -307,7 +413,7 @@ export class Game {
         vehicle: car,
         prompt,
       });
-      this.radar.draw({ x: focus.position.x, z: focus.position.z, yaw: this.chase.yaw, heading: focus.heading, inCar: focus.inCar, cars: this.garage.cars.filter((c) => c.ai !== 'police'), cash: this.cash.drops, police: this.police.cars.map((e) => e.car), time: this.time });
+      this.radar.draw({ x: focus.position.x, z: focus.position.z, yaw: this.chase.yaw, heading: focus.heading, inCar: focus.inCar, cars: this.garage.cars.filter((c) => c.ai !== 'police'), cash: this.cash.drops, police: this.police.cars.map((e) => e.car), mission: this.missions.currentTarget(), enemies: this.enemies.alive, time: this.time });
     }
     for (const car of this.garage.cars) if (car.typeName === 'police') car.flashLights(this.time);
     this.renderer.render(this.scene, this.camera);

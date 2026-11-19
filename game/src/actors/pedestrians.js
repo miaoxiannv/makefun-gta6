@@ -294,6 +294,28 @@ export class Pedestrians {
     }
   }
 
+  /** A punch lands at (x, z) facing `heading`: knock down whoever is inside the arc. */
+  hitByPunch(x, z, heading, range, arc) {
+    let hit = 0;
+    const fx = Math.sin(heading);
+    const fz = Math.cos(heading);
+    for (const ped of this.list) {
+      if (ped.state === 'down') continue;
+      const dx = ped.position.x - x;
+      const dz = ped.position.z - z;
+      const d = Math.hypot(dx, dz);
+      if (d > range || d < 1e-6) continue;
+      if ((dx * fx + dz * fz) / d < Math.cos(arc)) continue;
+      ped.state = 'down';
+      ped.downTimer = 2.5;
+      const push = 3 / Math.max(d, 0.5);
+      ped.knock = { x: dx * push, z: dz * push };
+      ped.fleeDir = { x: dx / d, z: dz / d };
+      hit += 1;
+    }
+    return hit;
+  }
+
   /** Push the player's circle out of every pedestrian. */
   pushOut(p, radius) {
     for (const ped of this.list) {

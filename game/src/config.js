@@ -112,6 +112,40 @@ export const WANTED = {
   seenRadius: 25,
 };
 
+/** On-foot combat: the player's punch, and what a punch does to a bystander. */
+export const COMBAT = {
+  /** Punch damage (25 with knuckle dusters). */
+  damage: 15,
+  /** How far a punch reaches, and the half-angle of its arc. */
+  range: 1.8,
+  arc: 1.1,
+  /** Seconds between punches. */
+  cooldown: 0.45,
+  /** Shove applied to whatever a punch lands on (m/s). */
+  knockback: 2.5,
+  /** Punching a bystander earns this many stars (once per punch). */
+  pedHeat: 1,
+};
+
+/** The rival crew that fights back: how many, how tough, how hard they hit. */
+export const ENEMIES = {
+  health: 30,
+  bossHealth: 80,
+  damage: 8,
+  bossDamage: 14,
+  speed: 3.2,
+  /** Inside this range an enemy starts swinging. */
+  attackRange: 1.25,
+  attackCooldown: 0.9,
+  /** How close the player must be before an enemy notices them. */
+  aggro: 60,
+  /** Seconds an enemy stays stunned after taking a punch. */
+  stagger: 0.35,
+  /** Cash pocketed for knocking one out ($100 for the boss). */
+  koCash: 25,
+  bossCash: 100,
+};
+
 /** Solano PD: how many cars chase, how fast, how a bust works. */
 export const POLICE = {
   maxActive: 3,

@@ -17,6 +17,8 @@ export class Player {
     this.gait = 0;
     this.vehicle = null;
     this.time = 0;
+    this.punchTimer = 0; // seconds left of the punch swing, for the arm pose
+    this.attackCooldown = 0; // seconds until the next punch can land
   }
 
   get object() {
@@ -31,12 +33,20 @@ export class Player {
     this.sync();
   }
 
+  /** Start a punch swing (the game resolves what it hits). */
+  punch() {
+    this.punchTimer = 0.25;
+    this.attackCooldown = 0.45;
+  }
+
   /**
    * One step. `controls.moveX/moveY` are -1..1 relative to the camera, whose yaw is `yaw`
    * (the direction the camera looks along the ground). `world` answers collision questions.
    */
   update(dt, controls, yaw, world) {
     this.time += dt;
+    this.punchTimer = Math.max(0, this.punchTimer - dt);
+    this.attackCooldown = Math.max(0, this.attackCooldown - dt);
     const fx = Math.sin(yaw);
     const fz = Math.cos(yaw);
     // camera right = forward rotated -90 degrees about y
@@ -81,5 +91,11 @@ export class Player {
     root.position.copy(this.position);
     root.rotation.y = this.heading;
     this.model.pose(this.phase, this.gait, !this.onGround, this.time);
+    if (this.punchTimer > 0) {
+      // the right arm snaps forward for the punch
+      this.model.armR.rotation.x = -1.5;
+      this.model.armR.rotation.z = 0;
+      this.model.armR.knee.rotation.x = -0.1;
+    }
   }
 }

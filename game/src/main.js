@@ -1,11 +1,14 @@
 // Entry point: creates the WebGL renderer and the game, wires the title and pause screens and
 // runs the frame loop. With ?shot=<name> it instead stages a deterministic screenshot scene,
-// draws it and raises window.__shotReady for the capture tool.
+// draws it and raises window.__shotReady for the capture tool. The title screen offers
+// Continue (a save exists), a fresh start, and Marla's jobs in unlock order.
 import * as THREE from 'three';
 import { Game } from './game.js';
 import { Input } from './core/input.js';
 import { Screens } from './ui/screens.js';
 import { stageShot } from './shots.js';
+import { MISSIONS } from './story/missions.js';
+import { clearSave, loadSave } from './story/save.js';
 
 const params = new URLSearchParams(location.search);
 const shot = params.get('shot');
@@ -32,25 +35,90 @@ resize();
 
 const input = new Input(canvas);
 
+/** The job list as the title screen shows it: name, reward, locked / open / done. */
+function missionListData() {
+  return {
+    list: MISSIONS.map((m) => ({
+      id: m.id,
+      name: m.name,
+      reward: m.reward,
+      state: game.missions.isComplete(m.id) ? 'done' : game.missions.isUnlocked(m.id) ? 'open' : 'locked',
+    })),
+    completed: game.missions.completed.length,
+    total: MISSIONS.length,
+    earned: game.progression.stats.earned,
+    knockouts: game.progression.stats.knockouts,
+  };
+}
+
+/** Leave the title screen and play, with the HUD on. */
+function enterGame() {
+  game.mode = 'play';
+  screens.showTitle(false);
+  game.hud.show(true);
+}
+
 function setPaused(paused) {
   if (game.mode === 'title' || game.mode === 'busted') return;
   game.mode = paused ? 'paused' : 'play';
+  if (paused) {
+    screens.renderStats({
+      missionsDone: game.missions.completed.length,
+      total: MISSIONS.length,
+      earned: game.progression.stats.earned,
+      knockouts: game.progression.stats.knockouts,
+      unlocks: game.progression.earnedNames(),
+    });
+  }
   screens.showPause(paused);
 }
 
+const save = loadSave();
+// A save belongs to the session before the title screen is drawn, so the job list and
+// the progress line show what the player already finished. Screenshot scenes stage
+// their own state, so they never load a save.
+if (save && !shot) game.applySave(save);
 const screens = new Screens({
   onStart() {
     if (game.mode !== 'title') return;
-    game.mode = 'play';
-    screens.showTitle(false);
-    game.hud.show(true);
+    enterGame();
     game.spawn();
     game.hud.toast('Welcome to <b>Port Solano</b>', 3);
   },
+  onContinue() {
+    if (game.mode !== 'title') return;
+    if (save) game.applySave(save);
+    enterGame();
+    game.spawn();
+    game.hud.toast('Welcome back to <b>Port Solano</b>', 3);
+  },
+  onNewGame() {
+    if (game.mode !== 'title') return;
+    clearSave();
+    game.resetProgress();
+    enterGame();
+    game.spawn();
+    game.hud.toast('Welcome to <b>Port Solano</b>', 3);
+  },
+  onMission(id) {
+    if (game.mode !== 'title') return;
+    if (save) game.applySave(save);
+    enterGame();
+    if (!game.missions.start(id)) {
+      game.mode = 'title';
+      screens.showTitle(true);
+      game.hud.show(false);
+    }
+  },
   onResume: () => setPaused(false),
   onBusted: () => game.releaseBusted(),
+  onReset() {
+    game.resetProgress();
+    location.reload();
+  },
 });
 game.screens = screens;
+screens.renderTitle(save, missionListData());
 window.addEventListener('keydown', (e) => {
   if (e.code === 'Escape' || e.code === 'KeyP') setPaused(game.mode === 'play');
 });

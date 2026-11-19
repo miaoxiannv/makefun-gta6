@@ -44,6 +44,7 @@
       <li><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> walk / drive</li>
       <li><kbd>Shift</kbd> sprint · <kbd>Space</kbd> jump / handbrake</li>
       <li><kbd>E</kbd> steal a car / get out</li>
+      <li><kbd>F</kbd> punch</li>
       <li><kbd>Q</kbd> <kbd>E</kbd> or drag: look · wheel: zoom</li>
       <li><kbd>Esc</kbd> pause</li>
     </ul>
@@ -57,12 +58,15 @@
     <p class="tagline">Sun. Sand. Sirens.</p>
     <nav>
       <button id="start-button" type="button">Start game</button>
+      <button id="new-game-button" type="button" hidden>New game</button>
       <button id="controls-button" type="button">Controls</button>
     </nav>
     <div id="title-controls">
       <p><kbd>W A S D</kbd> walk / drive · <kbd>Shift</kbd> sprint · <kbd>Space</kbd> jump / handbrake</p>
-      <p><kbd>E</kbd> steal or leave a car · <kbd>Q</kbd>/<kbd>E</kbd> or drag to look · <kbd>Esc</kbd> pause</p>
+      <p><kbd>E</kbd> steal or leave a car · <kbd>F</kbd> punch · <kbd>Q</kbd>/<kbd>E</kbd> or drag to look · <kbd>Esc</kbd> pause</p>
     </div>
+    <div id="mission-list"></div>
+    <p id="title-progress"></p>
     <p class="press">Press <kbd>Enter</kbd></p>
   </div>
 </div>
@@ -70,7 +74,8 @@
 <div id="pause-screen" hidden>
   <div class="card small">
     <h2>Paused</h2>
-    <nav><button id="resume-button" type="button">Resume</button></nav>
+    <div id="pause-stats"></div>
+    <nav><button id="resume-button" type="button">Resume</button><button id="reset-button" type="button">Reset progress</button></nav>
     <p class="press"><kbd>Esc</kbd> to resume</p>
   </div>
 </div>

@@ -19,13 +19,29 @@ export const SHOTS = {
     // three stars on the HUD; set after the sim so no pursuers spawn mid-shot
     game.state.wanted = 3;
   },
-  /** On foot on the downtown sidewalk, walking up to the parked line-up with the steal prompt. */
-  foot(game) {
-    game.state.hour = 10.4;
-    game.player.placeAt(10.6, -21, Math.PI, game.collision.groundHeight(10.6, -21));
-    game.chase.snap(game.focus(), Math.PI + 0.6, 0.16, game.collision);
-    // camera-relative input that walks straight up the sidewalk (north) toward the parked line-up
-    game.simulate(2.0, { moveY: Math.cos(0.6), moveX: Math.sin(0.6) });
+  /** A job in progress: the player walks onto the Dockside corner for The Drop, the crew
+   * jumps them, and the fight is on — objective card, gold marker, three wanted stars
+   * waiting on the HUD. */
+  mission(game) {
+    game.state.hour = 16.6;
+    // the first two jobs are done, so the third can start
+    game.missions.completed = ['m1', 'm2'];
+    game.missions.start('m3');
+    // step onto the package corner to spring the ambush
+    const pick = { x: -240, z: 240 };
+    game.player.placeAt(pick.x - 6, pick.z - 6, Math.PI / 4, game.collision.groundHeight(pick.x - 6, pick.z - 6));
+    game.simulate(1.2, { moveY: 1 });
+    // the crew closes in; hold the frame before they land too many punches
+    game.simulate(2.5, {});
+    game.hud.flash = 0;
+    game.state.wanted = 1;
+    // frame the nearest crew member over the player's shoulder
+    const foe = game.enemies.alive[0];
+    if (foe) {
+      const dx = foe.position.x - game.player.position.x;
+      const dz = foe.position.z - game.player.position.z;
+      game.chase.snap(game.focus(), Math.atan2(dx, dz), 0.16, game.collision);
+    }
   },
   /** A cab ride after dark: lit windows, glowing lamps, headlights on the asphalt, a Solano
    * PD cruiser ahead with its light bar flashing and a sedan coming the other way. */
