@@ -1,3 +1,7 @@
+[![make.fun · gta6-01](https://make.fun/badge/gta6-01.svg)](https://make.fun/bounty/gta6-01?utm_source=github&utm_medium=readme&utm_campaign=gta6-01)
+[![rank](https://make.fun/badge/gta6-01/miaoxiannv/makefun-gta6/rank.svg)](https://make.fun/bounty/gta6-01/leaderboard?utm_source=github&utm_medium=readme&utm_campaign=gta6-01)
+[![reward](https://make.fun/badge/gta6-01/miaoxiannv/makefun-gta6/reward.svg)](https://make.fun/bounty/gta6-01?utm_source=github&utm_medium=readme&utm_campaign=gta6-01)
+
 # Port Solano: Sun. Sand. Sirens.
 
 An open-world crime game for the desktop browser, built on Three.js. Port Solano is an
@@ -25,7 +29,9 @@ through an import map.
 | `W` `A` `S` `D` / arrows | walk, relative to the camera | throttle, brake / reverse, steer |
 | `Shift` | sprint | |
 | `Space` | jump | handbrake (kick the tail out) |
-| `E` / `F` | steal the nearest car | get out (when slow) |
+| `E` | steal the nearest car | get out (when slow) |
+| `F` | punch | |
+| `M` | mute sound | mute sound |
 | `Q` / `E`, mouse drag | turn the camera | look around (it swings back behind you) |
 | mouse wheel | zoom | zoom |
 | `H` | show or hide the controls card | |
@@ -54,6 +60,23 @@ through an import map.
   baked reflection map, window lights, lamp glow and headlights.
 - **Cash drops** around town, marked on the radar. Crash hard enough and you wake up at
   Solano Mercy Hospital, minus the bill.
+
+## What's in it (Day 2–4)
+
+- **Traffic and cops.** Fourteen AI traffic cars drive the grid, twenty-two pedestrians
+  walk the sidewalks, and Solano PD pursues on wanted stars — get busted and pay the $200
+  fine (or walk free).
+- **Jobs.** Four story missions from the fixer Marla — steal a car, a timed getaway, a
+  drop-off ambush, and a payback fight — with punch combat (fists and knuckle dusters),
+  rival crew AI, a boss fight, unlocks (knuckle dusters, armored jacket, a getaway coupe,
+  a garage safehouse), and a localStorage save with Continue on the title screen.
+- **Effects.** Impact spark bursts, exhaust puffs, handbrake skid marks, a damage flash,
+  and screen shake on hard hits and busts.
+- **Sound.** Synthesized WebAudio only — an engine hum that follows your speed, a police
+  siren while wanted, collision thuds, punch hits, cash pickups, UI clicks, and
+  mission-complete / fail stingers. `M` or the 🔊 button mutes it.
+- **Menus.** A title screen with the job list and progress, mission complete / fail cards,
+  a pause screen with stats, and a busted screen.
 
 ## Screenshots and checks
 
@@ -90,3 +113,5 @@ tools/                         headless browser helper, screenshot tool, playtes
 ## Licence
 
 MIT. Three.js is © its authors and MIT licensed.
+
+<sub>Entered on [make.fun](https://make.fun/?ref=98fayedq&utm_source=github&utm_medium=readme&utm_campaign=gta6-01) · AI agents build software for cash rewards</sub>

@@ -1,7 +1,3 @@
-// Street furniture, drawn with instancing so hundreds cost a handful of draw calls: street
-// lamps whose heads glow after dusk, royal palms along the beach, the boulevard and the parks,
-// round-crowned shade trees in Palm Heights, benches and fountains in the parks. Each pole and
-// trunk is also registered as a small solid box so you can drive into it.
 import * as THREE from 'three';
 import { CITY_HALF, CITY_SIZE, GRID } from '../config.js';
 import { MeshBuilder } from '../core/mesh-builder.js';
@@ -24,7 +20,6 @@ function instanced(geometry, material, transforms, { shadows = true } = {}) {
   return mesh;
 }
 
-/** A palm crown: drooping fronds radiating from the top of the trunk (origin). */
 function palmCrown() {
   const b = new MeshBuilder();
   const green = new THREE.Color('#3f7d32');
@@ -33,7 +28,7 @@ function palmCrown() {
     const a = (k / 9) * Math.PI * 2;
     const c = Math.cos(a);
     const s = Math.sin(a);
-    // each frond is two slanted segments: up-and-out, then out-and-down
+    
     const seg = (r0, y0, r1, y1, w0, w1, col) => {
       const px = -s;
       const pz = c;
@@ -76,7 +71,7 @@ export class StreetProps {
 
     for (const b of plan.blocks) {
       const inset = 0.9;
-      // lamps along each side of the block, facing the road
+      
       for (let t = 6; t < GRID.block - 4; t += 20) {
         lamps.push({ x: b.x0 + t, z: b.z0 + inset, yaw: Math.PI });
         lamps.push({ x: b.x1 - t, z: b.z1 - inset, yaw: 0 });
@@ -110,7 +105,7 @@ export class StreetProps {
         for (let k = 0; k < 6; k += 1) trees.push({ x: rng.range(b.x0 + 6, b.x1 - 6), z: rng.pick([b.z0 + 5.2, b.z1 - 5.2]), s: rng.range(0.7, 1.1), yaw: rng() * 6.3 });
       }
     }
-    // the beach: palms along the promenade, a few on the sand
+    
     for (let z = -CITY_SIZE / 2 + 10; z < CITY_SIZE / 2; z += 14) {
       palms.push({ x: CITY_HALF + 7.5, z: z + rng.range(-2, 2), s: rng.range(0.95, 1.3), yaw: rng() * 6.3, tilt: rng.range(-0.15, 0.05) });
       if (rng.chance(0.35)) palms.push({ x: CITY_HALF + rng.range(18, 36), z: z + rng.range(-5, 5), s: rng.range(0.9, 1.4), yaw: rng() * 6.3, tilt: rng.range(-0.2, 0.2) });
@@ -122,14 +117,12 @@ export class StreetProps {
     for (const t of palms) collision.addBox(t.x - 0.3, t.z - 0.3, t.x + 0.3, t.z + 0.3, 8);
     for (const t of trees) collision.addBox(t.x - 0.35, t.z - 0.35, t.x + 0.35, t.z + 0.35, 5);
 
-    // lamps and their glowing heads
     const vc = { vertexColors: true, roughness: 0.6 };
     this.group.add(instanced(lampGeometry(), new THREE.MeshStandardMaterial({ ...vc, metalness: 0.4 }), lamps));
     this.lampHeads = new THREE.MeshStandardMaterial({ color: '#fff4d6', emissive: '#ffd38a', emissiveIntensity: 0 });
     const head = new THREE.BoxGeometry(0.42, 0.06, 0.8).translate(0, 6.84, 1.85);
     this.group.add(instanced(head, this.lampHeads, lamps, { shadows: false }));
 
-    // palms: a gently tapering trunk plus the crown
     const trunkGeo = new THREE.CylinderGeometry(0.17, 0.28, 8, 7, 4).translate(0, 4, 0);
     const trunkMat = new THREE.MeshStandardMaterial({ color: '#9b8466', roughness: 1 });
     this.group.add(instanced(trunkGeo, trunkMat, palms));
@@ -137,7 +130,6 @@ export class StreetProps {
     const leafMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, side: THREE.DoubleSide });
     this.group.add(instanced(palmCrown(), leafMat, crowns.map((c) => ({ ...c, tilt: 0 }))));
 
-    // shade trees: trunk and a lumpy round canopy
     this.group.add(instanced(new THREE.CylinderGeometry(0.2, 0.3, 3, 6).translate(0, 1.5, 0), trunkMat, trees));
     const canopy = new THREE.IcosahedronGeometry(2.6, 1).translate(0, 4.4, 0);
     this.group.add(instanced(canopy, new THREE.MeshStandardMaterial({ color: '#4f8a3a', roughness: 0.95, flatShading: true }), trees));

@@ -1,6 +1,3 @@
-// A jointed low-poly person: hips, torso, head with hair and shades, swinging arms and legs.
-// The same rig dresses the player now and pedestrians later; `pose` drives the walk and run
-// cycle from a stride phase, and a tucked pose for jumps.
 import * as THREE from 'three';
 
 const box = (w, h, d, mat, y = 0) => {
@@ -29,7 +26,7 @@ export class PersonModel {
     this.torso.position.y = 0.08;
     this.hips.add(this.torso);
     this.torso.add(box(0.44, 0.56, 0.25, shirt, 0.3));
-    // an open shirt over a pale tee, the look of the protagonist
+    
     if (look.print) this.torso.add(box(0.16, 0.5, 0.02, m(look.print), 0.31).translateZ(0.13));
     this.torso.add(box(0.12, 0.08, 0.12, skin, 0.62));
 
@@ -63,10 +60,6 @@ export class PersonModel {
     this.torso.add(this.armL, this.armR);
   }
 
-  /**
-   * Pose for a stride `phase` (radians), `gait` 0 standing .. 1 walking .. 2 sprinting, and
-   * whether the feet are off the ground.
-   */
   pose(phase, gait, airborne, time) {
     const swing = Math.min(1, gait) * 0.55 + Math.max(0, gait - 1) * 0.35;
     const s = Math.sin(phase);
@@ -90,7 +83,7 @@ export class PersonModel {
     this.armL.rotation.z = -0.08;
     this.armR.rotation.z = 0.08;
     this.torso.rotation.x = Math.max(0, gait - 1) * 0.22;
-    // breathe when idle, bob when moving
+    
     const bob = gait > 0.05 ? Math.abs(Math.cos(phase)) * 0.05 * swing : Math.sin(time * 2) * 0.008;
     this.hips.position.y = 0.95 + bob - swing * 0.03;
     this.head.rotation.y = gait > 0.05 ? 0 : Math.sin(time * 0.4) * 0.25;

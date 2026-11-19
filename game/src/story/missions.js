@@ -1,11 +1,5 @@
-// Marla's jobs: four missions in a row, each a short story beat with its own stages.
-// 1. First Wheels — steal a car and drop it at the Marina. 2. Getaway — cross town on a
-// clock with two stars on you. 3. The Drop — pick up a package, fight off the crew that
-// jumps you, deliver it uptown. 4. Payback — clear the warehouse crew, boss included,
-// then drive home to the garage. Missions unlock in order; a bust, a hospital trip or
-// a blown timer fails the active one, and it can be retried right away.
 import * as THREE from 'three';
-import { MISSION_UNLOCK } from './progression.js';
+import { MISSION_UNLOCK, UNLOCKS } from './progression.js';
 
 export const MISSIONS = [
   {
@@ -57,7 +51,7 @@ export class Missions {
     this.scene = scene;
     this.game = game;
     this.completed = [];
-    this.active = null; // {def, index, stage, timer}
+    this.active = null; 
     this.marker = this.makeMarker();
     this.scene.add(this.marker.group);
     this.marker.group.visible = false;
@@ -96,14 +90,12 @@ export class Missions {
     return this.completed.includes(id);
   }
 
-  /** The target the radar should point at right now, or null. */
   currentTarget() {
     if (!this.active) return null;
     const s = this.active.stage;
     return s.x !== undefined ? { x: s.x, z: s.z } : null;
   }
 
-  /** Start a mission: place the player at its start and open its first stage. */
   start(id) {
     const def = this.def(id);
     if (!def || !this.isUnlocked(id)) return false;
@@ -113,7 +105,7 @@ export class Missions {
     game.player.placeAt(def.start.x, def.start.z, def.start.heading, game.collision.groundHeight(def.start.x, def.start.z));
     game.chase.snap(game.focus(), def.start.heading, 0.2, game.collision);
     this.active = { def, index: 0, stage: def.stages[0], timer: 0 };
-    // a getaway needs wheels under you from the first second
+    
     if (id === 'm2') {
       const car = game.garage.add('sedan', '#2f4b7c', def.start.x + 6, def.start.z + 2, def.start.heading);
       car.asleep = false;
@@ -140,7 +132,6 @@ export class Missions {
     }
   }
 
-  /** A drive stage is unwinnable with no car around: park one close to the player. */
   ensureCarNearby() {
     const game = this.game;
     const p = game.player.position;
@@ -174,6 +165,8 @@ export class Missions {
     this.active = null;
     this.marker.group.visible = false;
     game.enemies.clearAll();
+    game.sound.win();
+    game.hud.missionCard(`<b>${def.name} complete</b><span>+$${def.reward} · unlocked: <b>${UNLOCKS[unlock].name}</b></span>`, 4.5);
     game.hud.toast(`<b>${def.name} complete</b> · <b class="cash">+$${def.reward}</b>`, 5);
     game.saveProgress();
   }
@@ -196,13 +189,15 @@ export class Missions {
 
   fail(reason) {
     if (!this.active) return;
+    const name = this.active.def.name;
     this.active = null;
     this.marker.group.visible = false;
     this.game.enemies.clearAll();
+    this.game.sound.fail();
+    this.game.hud.missionCard(`<b>${name} failed</b><span>${FAIL_TEXT[reason] ?? 'The job fell through.'}</span>`, 4);
     this.game.hud.toast(FAIL_TEXT[reason] ?? 'The job fell through.', 4);
   }
 
-  /** The objective card text for the HUD: the job, the stage, and the clock when timed. */
   objective() {
     if (!this.active) return null;
     const { def, stage, timer } = this.active;
@@ -217,7 +212,7 @@ export class Missions {
   }
 
   update(dt) {
-    // the marker pulses while a mission is running
+    
     if (this.marker.group.visible) {
       const t = this.game.time;
       const s = 1 + Math.sin(t * 3) * 0.08;
@@ -257,7 +252,6 @@ export class Missions {
     }
   }
 
-  /** Forget the active job and the finished ones (new game / reset). */
   reset() {
     this.active = null;
     this.completed = [];

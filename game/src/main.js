@@ -1,12 +1,8 @@
-// Entry point: creates the WebGL renderer and the game, wires the title and pause screens and
-// runs the frame loop. With ?shot=<name> it instead stages a deterministic screenshot scene,
-// draws it and raises window.__shotReady for the capture tool. The title screen offers
-// Continue (a save exists), a fresh start, and Marla's jobs in unlock order.
 import * as THREE from 'three';
-import { Game } from './game.js';
 import { Input } from './core/input.js';
 import { Screens } from './ui/screens.js';
 import { stageShot } from './shots.js';
+import { Game } from './game.js';
 import { MISSIONS } from './story/missions.js';
 import { clearSave, loadSave } from './story/save.js';
 
@@ -22,9 +18,11 @@ renderer.shadowMap.type = THREE.PCFShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 
 const game = new Game(renderer, { seed });
-// compile every shader up front so the first drive does not hitch on a shader build
+
 renderer.compile(game.scene, game.camera);
-window.portSolano = game; // for poking at from the dev console
+window.portSolano = game;
+window.addEventListener('keydown', () => game.sound.ensure());
+window.addEventListener('pointerdown', () => game.sound.ensure());
 
 function resize() {
   renderer.setSize(window.innerWidth, window.innerHeight, false);
@@ -35,7 +33,6 @@ resize();
 
 const input = new Input(canvas);
 
-/** The job list as the title screen shows it: name, reward, locked / open / done. */
 function missionListData() {
   return {
     list: MISSIONS.map((m) => ({
@@ -51,7 +48,6 @@ function missionListData() {
   };
 }
 
-/** Leave the title screen and play, with the HUD on. */
 function enterGame() {
   game.mode = 'play';
   screens.showTitle(false);
@@ -74,9 +70,7 @@ function setPaused(paused) {
 }
 
 const save = loadSave();
-// A save belongs to the session before the title screen is drawn, so the job list and
-// the progress line show what the player already finished. Screenshot scenes stage
-// their own state, so they never load a save.
+
 if (save && !shot) game.applySave(save);
 const screens = new Screens({
   onStart() {
@@ -121,6 +115,7 @@ game.screens = screens;
 screens.renderTitle(save, missionListData());
 window.addEventListener('keydown', (e) => {
   if (e.code === 'Escape' || e.code === 'KeyP') setPaused(game.mode === 'play');
+  else if (e.code === 'KeyM') game.toggleMute();
 });
 
 if (shot) {

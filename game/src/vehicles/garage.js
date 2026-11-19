@@ -1,6 +1,3 @@
-// Every car in town: parks them along the kerbs from the plan, steps the ones that are awake,
-// shoves cars apart when they touch (the heavier one moves less), keeps people from walking
-// through bodywork and finds the nearest car to get into.
 import { makeRng } from '../core/rng.js';
 import { Car } from './car.js';
 import { CAR_TYPES } from './car-models.js';
@@ -21,7 +18,6 @@ export class Garage {
     return car;
   }
 
-  /** Fill a share of the kerbside spots, skipping any that `keepClear(spot)` rejects. */
   parkAlongKerbs(spots, seed, keepClear = () => true) {
     const rng = makeRng(seed);
     for (const s of spots) {
@@ -41,7 +37,6 @@ export class Garage {
     return best;
   }
 
-  /** Step awake cars; `driven` gets the player's controls. AI cars drive themselves. */
   update(dt, world, driven, controls) {
     for (const car of this.cars) {
       if (car === driven) car.update(dt, controls, world);
@@ -50,14 +45,12 @@ export class Garage {
     this.separate();
   }
 
-  /** Take a car out of the world entirely (a police cruiser leaving, for instance). */
   remove(car) {
     const i = this.cars.indexOf(car);
     if (i >= 0) this.cars.splice(i, 1);
     this.scene.remove(car.object);
   }
 
-  /** Circle-vs-circle contacts between moving cars and anything near them. */
   separate() {
     const awake = this.cars.filter((c) => !c.asleep);
     for (const a of awake) {
@@ -79,7 +72,7 @@ export class Garage {
             a.position.z -= nz * depth * wa;
             b.position.x += nx * depth * (1 - wa);
             b.position.z += nz * depth * (1 - wa);
-            // exchange momentum along the contact normal
+            
             const rel = (a.velocity.x - b.velocity.x) * nx + (a.velocity.z - b.velocity.z) * nz;
             if (rel > 0) {
               const j = rel * 1.2;
@@ -98,7 +91,6 @@ export class Garage {
     }
   }
 
-  /** Push a walker's circle out of any car body (an oriented box). */
   pushOutOfCars(p, radius) {
     for (const car of this.cars) {
       const dx = p.x - car.position.x;
@@ -106,7 +98,7 @@ export class Garage {
       if (dx * dx + dz * dz > 16) continue;
       const s = Math.sin(car.heading);
       const c = Math.cos(car.heading);
-      // into the car's frame: along the nose and across to its right
+      
       const lz = dx * s + dz * c;
       const lx = -dx * c + dz * s;
       const hx = car.type.width / 2;
@@ -118,7 +110,7 @@ export class Garage {
       let d = Math.hypot(ox, oz);
       if (d >= radius) continue;
       if (d < 1e-6) {
-        // inside: leave by the nearest side
+        
         const outX = hx - Math.abs(lx);
         const outZ = hz - Math.abs(lz);
         if (outX < outZ) { ox = Math.sign(lx) || 1; oz = 0; d = -outX; } else { ox = 0; oz = Math.sign(lz) || 1; d = -outZ; }
@@ -126,7 +118,7 @@ export class Garage {
         ox /= d; oz /= d;
       }
       const push = radius - d;
-      // back to world space
+      
       p.x += (-ox * c + oz * s) * push;
       p.z += (ox * s + oz * c) * push;
     }

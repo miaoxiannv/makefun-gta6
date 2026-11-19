@@ -1,6 +1,3 @@
-// Procedural textures painted on 2D canvases at start-up: asphalt, pavement, grass, sand and
-// the building facades (with a matching night map of lit windows). Nothing is downloaded, so
-// the game stays tiny and works offline, and every facade comes from the city seed.
 import * as THREE from 'three';
 import { makeRng } from './rng.js';
 
@@ -16,7 +13,6 @@ function canvasTexture(size, paint, { srgb = true, repeat = true } = {}) {
   return tex;
 }
 
-/** Scatter `count` specks of random brightness over the canvas. */
 function speckle(ctx, size, rng, count, colours, alpha = 0.25, max = 2) {
   for (let i = 0; i < count; i += 1) {
     ctx.globalAlpha = alpha * rng();
@@ -33,7 +29,7 @@ export function asphaltTexture() {
     ctx.fillStyle = '#4a4c52';
     ctx.fillRect(0, 0, s, s);
     speckle(ctx, s, rng, 5000, ['#2c2e33', '#6b6d72', '#57595e', '#3a3c40'], 0.6, 2);
-    // a few darker patches where the tar was redone
+    
     for (let i = 0; i < 5; i += 1) {
       ctx.globalAlpha = 0.08;
       ctx.fillStyle = '#202226';
@@ -79,7 +75,6 @@ export function sandTexture() {
   });
 }
 
-/** Roof gravel and HVAC grime. */
 export function roofTexture() {
   const rng = makeRng(15);
   return canvasTexture(128, (ctx, s) => {
@@ -89,11 +84,6 @@ export function roofTexture() {
   });
 }
 
-/**
- * Facade styles. Each texture covers `bays` x `floors` windows and tiles with the metres in
- * `tile`. The day map is light where the wall is (so per-building vertex colours tint it) and
- * the night map is black except for the windows that are lit.
- */
 export const FACADE_STYLES = {
   tower: { bays: 8, floors: 8, tile: [24, 28], wall: '#e9eef2', glass: '#5d7f99', frame: 0.08, gap: 0.04 },
   office: { bays: 8, floors: 8, tile: [26, 28], wall: '#f2efe8', glass: '#3e5568', frame: 0.22, gap: 0.3 },
@@ -140,7 +130,7 @@ export function facadeTextures(styleName, seed) {
       ctx.fillStyle = g;
       ctx.fillRect(w.x, w.y, w.w, w.h);
       if (style.frame > 0.15) {
-        // sill shadow and mullion
+        
         ctx.fillStyle = 'rgba(0,0,0,0.25)';
         ctx.fillRect(w.x, w.y, w.w, 3);
         ctx.fillStyle = 'rgba(255,255,255,0.35)';

@@ -1,7 +1,3 @@
-// The rival crew: Marla's jobs always draw the wrong kind of attention. An enemy stands
-// at its spot until the player gets close, then chases them down and swings when it gets
-// in range. A punch staggers one; enough punches knock it down, and knocking one out
-// pockets a little of the crew's cash.
 import * as THREE from 'three';
 import { ENEMIES } from '../config.js';
 import { approachAngle, makeRng } from '../core/rng.js';
@@ -34,14 +30,12 @@ class Enemy {
   get z() { return this.position.z; }
   get alive() { return this.state !== 'down'; }
 
-  /** Step toward `heading` at `speed`, turning to face the way of travel. */
   walkToward(dt, heading, speed) {
     this.heading = approachAngle(this.heading, heading, 8 * dt);
     this.position.x += Math.sin(this.heading) * speed * dt;
     this.position.z += Math.cos(this.heading) * speed * dt;
   }
 
-  /** A punch lands: lose health, get shoved, stagger — or go down. Returns true on a KO. */
   hit(damage, kx, kz) {
     if (this.state === 'down') return false;
     this.health -= damage;
@@ -58,7 +52,7 @@ class Enemy {
   }
 
   update(dt, time, world, player, onPlayerHit) {
-    // knocked down: slide to a stop on the ground
+    
     if (this.state === 'down') {
       this.downTimer -= dt;
       this.position.x += this.knock.x * dt;
@@ -84,7 +78,7 @@ class Enemy {
           this.walkToward(dt, Math.atan2(dx, dz), this.speed);
           this.gait = 1;
         } else {
-          // in range: swing on a cooldown, stepping in as the fist lands
+          
           this.gait = 0;
           this.attackTimer -= dt;
           if (this.attackTimer <= 0) {
@@ -120,7 +114,6 @@ export class Enemies {
     this.list = [];
   }
 
-  /** Bring in `count` crew around (cx, cz); the last one is the boss when asked. */
   spawn(count, cx, cz, { boss = false } = {}) {
     const rng = makeRng((Math.floor(cx * 13 + cz * 7) >>> 0) + count * 101 + (boss ? 5 : 0));
     for (let k = 0; k < count; k += 1) {
@@ -134,7 +127,7 @@ export class Enemies {
 
   update(dt, time, world, player, onPlayerHit) {
     for (const enemy of this.list) enemy.update(dt, time, world, player, onPlayerHit);
-    // the dead leave after lying on the ground a while
+    
     for (const enemy of [...this.list]) {
       if (enemy.state === 'down' && enemy.downTimer <= 0) {
         this.scene.remove(enemy.model.root);
@@ -143,18 +136,15 @@ export class Enemies {
     }
   }
 
-  /** Enemies still standing. */
   get alive() {
     return this.list.filter((e) => e.alive);
   }
 
-  /** Take every enemy out of the world (mission over, or a reset). */
   clearAll() {
     for (const enemy of this.list) this.scene.remove(enemy.model.root);
     this.list = [];
   }
 
-  /** Keep the player's circle out of every enemy standing. */
   pushOut(p, radius) {
     for (const enemy of this.list) {
       if (!enemy.alive) continue;

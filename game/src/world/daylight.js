@@ -1,10 +1,6 @@
-// The look of every hour of the day: sky colours, sun and moon direction, light colours and
-// strengths, fog. The sky, the sun light, the sea and the city's night lights all read the one
-// `Daylight` record so the whole scene shifts together from noon glare to violet dusk.
 import * as THREE from 'three';
 import { clamp, smoothstep } from '../core/rng.js';
 
-/** Key frames by hour; colours are blended between neighbouring keys. */
 const KEYS = [
   { h: 0, zenith: '#060a1c', horizon: '#1a2340', sun: '#6a7cc8', sunI: 0.4, hemiSky: '#3b4c86', hemiGround: '#1a1824', hemiI: 0.6, fog: '#141b33' },
   { h: 5, zenith: '#0b1330', horizon: '#3b3555', sun: '#7a86c8', sunI: 0.4, hemiSky: '#3e4878', hemiGround: '#1a1822', hemiI: 0.8, fog: '#252a45' },
@@ -20,7 +16,6 @@ const KEYS = [
 const COLOURS = ['zenith', 'horizon', 'sun', 'hemiSky', 'hemiGround', 'fog'];
 for (const k of KEYS) for (const c of COLOURS) k[c] = new THREE.Color(k[c]);
 
-/** Sample the day at `hour` (0..24). Returns colours, intensities, light direction and night 0..1. */
 export function sampleDaylight(hour, out = makeDaylight()) {
   const h = ((hour % 24) + 24) % 24;
   let i = 0;
@@ -32,12 +27,11 @@ export function sampleDaylight(hour, out = makeDaylight()) {
   out.sunI = a.sunI + (b.sunI - a.sunI) * t;
   out.hemiI = a.hemiI + (b.hemiI - a.hemiI) * t;
 
-  // The sun rises in the east over the Gulf at 6:00 and sets behind the city at 19:00.
   const dayT = (h - 6) / 13;
   const sunUp = dayT > 0 && dayT < 1;
   const arc = Math.PI * clamp(dayT, 0, 1);
   out.sunDir.set(Math.cos(arc), Math.sin(arc) * 0.9 + 0.04, 0.35).normalize();
-  // the moon follows the opposite arc at night
+  
   const nightT = ((h + 24 - 19) % 24) / 11;
   const moonArc = Math.PI * clamp(nightT, 0, 1);
   out.moonDir.set(Math.cos(moonArc), Math.sin(moonArc) * 0.8 + 0.1, -0.3).normalize();
@@ -58,7 +52,6 @@ export function makeDaylight() {
   return d;
 }
 
-/** "16:05" for an hour value. */
 export function clockText(hour) {
   const h = Math.floor(hour) % 24;
   const m = Math.floor((hour - Math.floor(hour)) * 60);

@@ -1,9 +1,3 @@
-// Solano PD: wanted stars bring police cars. They spawn on a road near the player, drive
-// the street grid toward the player's intersection, then chase directly and try to pin the
-// player down. Pinned — slow in a car, or caught on foot — for long enough and the bust
-// lands: a fine, the stars clear, and the player wakes up at Solano Mercy. Lose the cars —
-// out of a cruiser's close sight for a while, and no fresh crime — and the stars tick down
-// one at a time; a cruiser that cannot reach the player for a while gives up and leaves.
 import { CELL, GRID, POLICE, WANTED } from '../config.js';
 import { blockIndex, roadCentre } from '../city/plan.js';
 import { clamp, makeRng, wrapAngle } from '../core/rng.js';
@@ -13,10 +7,10 @@ export class Police {
   constructor(scene, garage, state, seed = 1, notify = () => {}) {
     this.scene = scene;
     this.garage = garage;
-    this.state = state; // game state, holds `wanted`
+    this.state = state; 
     this.notify = notify;
     this.rng = makeRng(seed * 541 + 11);
-    this.cars = []; // {car, driver, chaseTime, closest}
+    this.cars = []; 
     this.playerPos = { x: 0, z: 0 };
     this.time = 0;
     this.smoothPlayerSpeed = 0;
@@ -28,14 +22,12 @@ export class Police {
     this.cooldowns = { ram: 0, speed: 0 };
   }
 
-  /** One more star (clamped), and the lose-the-cops clocks restart. */
   addHeat(n) {
     const before = this.state.wanted;
     this.state.wanted = clamp(this.state.wanted + n, 0, WANTED.max);
     if (this.state.wanted > before) this.lastCrimeAt = this.time;
   }
 
-  /** The neighbour of `to` that gets closest to the player's intersection. */
   chaseNext(from, to) {
     const target = nearestIntersection(this.playerPos.x, this.playerPos.z);
     let best = null;
@@ -44,14 +36,13 @@ export class Police {
       const nx = to.ix + dx;
       const nz = to.iz + dz;
       if (nx < 0 || nx > GRID.blocks || nz < 0 || nz > GRID.blocks) continue;
-      if (nx === from.ix && nz === from.iz) continue; // no U-turns while chasing
+      if (nx === from.ix && nz === from.iz) continue; 
       const d = Math.abs(nx - target.ix) + Math.abs(nz - target.iz);
       if (d < bestD) { bestD = d; best = { ix: nx, iz: nz }; }
     }
     return best ?? from;
   }
 
-  /** An intersection 70-110 m from the player to spawn a cruiser at, or null. */
   spawnIntersection(playerPos) {
     for (let tries = 0; tries < 12; tries += 1) {
       const a = this.rng.range(0, Math.PI * 2);
@@ -63,11 +54,10 @@ export class Police {
     return null;
   }
 
-  /** Bring in one cruiser, on a leg from a nearby intersection toward the player. */
   spawnOne(playerPos) {
     const at = this.spawnIntersection(playerPos);
     if (!at) return null;
-    const next = this.chaseNext(at, at); // from == to: every neighbour is a candidate
+    const next = this.chaseNext(at, at); 
     const info = legInfo(at, next);
     const spot = lanePointAt(info, 3);
     const car = this.garage.add('police', null, spot.x, spot.z, legHeading(info));
@@ -79,7 +69,6 @@ export class Police {
     return car;
   }
 
-  /** How hard this cruiser should brake for the traffic ahead of it (0 = clear). */
   blockedFor(car) {
     const fx = Math.sin(car.heading);
     const fz = Math.cos(car.heading);
@@ -99,28 +88,24 @@ export class Police {
     return brake;
   }
 
-  /** Take a cruiser out of the world entirely. */
   remove(entry) {
     this.garage.remove(entry.car);
     const i = this.cars.indexOf(entry);
     if (i >= 0) this.cars.splice(i, 1);
   }
 
-  /** All cruisers leave (wanted cleared, or the bust is served). */
   clearAll() {
     for (const entry of [...this.cars]) this.remove(entry);
     this.bustTimer = 0;
     this.bustReady = false;
   }
 
-  /** The player stole this cruiser: it stops being police. */
   release(car) {
     const entry = this.cars.find((e) => e.car === car);
     if (entry) this.cars.splice(this.cars.indexOf(entry), 1);
     car.ai = null;
   }
 
-  /** Metres from (x, z) to the nearest road centre line. */
   roadDistance(x, z) {
     const dist = (v) => {
       const i = Math.max(0, Math.min(GRID.blocks, Math.round((v - roadCentre(0)) / CELL)));
@@ -144,7 +129,6 @@ export class Police {
       return;
     }
 
-    // keep the heat on, while the trail is warm: up to one cruiser per star, at most three
     const want = Math.min(this.state.wanted, POLICE.maxActive);
     const trailWarm = this.time - this.lastCrimeAt < POLICE.spawnWarmSeconds
       || this.time - this.lastSeenAt < POLICE.spawnSeenSeconds;
@@ -153,8 +137,6 @@ export class Police {
       if (this.spawnOne(focus.position)) this.spawnTimer = 1.5;
     }
 
-    // the player is reachable by car when driving, or on foot near a road; deeper inside
-    // a block, the cruisers can only drive to the nearest intersection and wait
     const reachable = focus.inCar
       || blockIndex(focus.position.x) < 0
       || blockIndex(focus.position.z) < 0
@@ -169,7 +151,7 @@ export class Police {
       nearest = Math.min(nearest, dist);
       entry.chaseTime += dt;
       entry.closest = Math.min(entry.closest, dist);
-      // cannot reach the player for a long while: give up and leave
+      
       if (entry.chaseTime > POLICE.giveUpSeconds && entry.closest > POLICE.giveUpRadius) {
         this.remove(entry);
         this.notify('A cruiser lost your trail');
@@ -177,7 +159,7 @@ export class Police {
       }
       let controls;
       if (reachable && dist <= 35) {
-        // close in: steer straight at the player and ram
+        
         const desired = Math.atan2(dx, dz);
         const diff = wrapAngle(desired - car.heading);
         controls = {
@@ -187,16 +169,13 @@ export class Police {
           handbrake: false,
         };
       } else {
-        // drive the grid toward the player's intersection
+        
         controls = driver.controls(16, this.blockedFor(car));
       }
       car.update(dt, controls, world);
     }
     if (nearest < WANTED.seenRadius) this.lastSeenAt = this.time;
 
-    // pinned down: slow in a car, or caught on foot. The player car's speed is smoothed
-    // over ~0.5 s first: a cruiser ramming a stopped car shoves it to 2-3 m/s in brief
-    // spikes, which must not break the pin — only a sustained drive-away does.
     const playerCar = player.vehicle;
     if (playerCar) {
       const target = Math.abs(playerCar.forwardSpeed);
@@ -214,7 +193,6 @@ export class Police {
       this.bustTimer = Math.max(0, this.bustTimer - dt * 2);
     }
 
-    // out of sight and no fresh crime: the stars tick down one at a time
     if (this.time - this.lastCrimeAt > WANTED.crimeCooldown
       && this.time - this.lastSeenAt > WANTED.unseenSeconds) {
       this.state.wanted -= 1;
@@ -222,7 +200,6 @@ export class Police {
       this.notify(this.state.wanted > 0 ? 'You lost a star — keep out of sight' : 'You lost the cops');
     }
 
-    // speeding past the police, and ramming a cruiser, both earn heat
     if (playerCar && Math.abs(playerCar.forwardSpeed) > POLICE.speedLimit && nearest < 45 && this.cooldowns.speed <= 0) {
       this.addHeat(1);
       this.cooldowns.speed = POLICE.speedCooldown;

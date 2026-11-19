@@ -1,8 +1,3 @@
-// The self-driving cars of Port Solano: they follow the road network in the right-hand
-// lane, pick a new street at every intersection, brake for the car or pedestrian ahead,
-// and keep the city alive around the player (cars that end up far away are moved to a road
-// near the player). A traffic car is an ordinary garage car with car.ai = 'traffic'; when
-// it has slowed or stopped, the player can steal it with E like any other car.
 import { CELL, GRID, TRAFFIC } from '../config.js';
 import { roadCentre } from '../city/plan.js';
 import { makeRng } from '../core/rng.js';
@@ -18,11 +13,10 @@ export class Traffic {
     this.plan = plan;
     this.avoid = avoid;
     this.rng = makeRng(seed * 331 + 7);
-    this.cars = []; // {car, driver, cruise}
+    this.cars = []; 
     for (let k = 0; k < TRAFFIC.count; k += 1) this.spawnFar();
   }
 
-  /** A random next intersection from `to`: any neighbour, rarely back the way it came. */
   wanderNext(from, to) {
     const options = [];
     for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
@@ -38,13 +32,12 @@ export class Traffic {
     return options.length ? this.rng.pick(options) : from;
   }
 
-  /** The leg a car at (x, z) heading `heading` is on, snapped to its lane. */
   legAt(x, z, heading) {
     const axis = Math.abs(Math.sin(heading)) > Math.abs(Math.cos(heading)) ? 'x' : 'z';
     if (axis === 'z') {
       const ix = Math.max(0, Math.min(GRID.blocks, Math.round((x - roadCentre(0)) / CELL)));
       const k = Math.max(0, Math.min(GRID.blocks - 1, Math.floor((z - roadCentre(0)) / CELL)));
-      // north-south road: heading 0 runs south (+z), heading PI runs north (-z)
+      
       const dir = Math.cos(heading) >= 0 ? 1 : -1;
       const from = dir > 0 ? { ix, iz: k } : { ix, iz: k + 1 };
       const to = dir > 0 ? { ix, iz: k + 1 } : { ix, iz: k };
@@ -52,17 +45,13 @@ export class Traffic {
     }
     const iz = Math.max(0, Math.min(GRID.blocks, Math.round((z - roadCentre(0)) / CELL)));
     const k = Math.max(0, Math.min(GRID.blocks - 1, Math.floor((x - roadCentre(0)) / CELL)));
-    // east-west road: heading PI/2 runs east (+x), -PI/2 runs west (-x)
+    
     const dir = Math.sin(heading) >= 0 ? 1 : -1;
     const from = dir > 0 ? { ix: k, iz } : { ix: k + 1, iz };
     const to = dir > 0 ? { ix: k + 1, iz } : { ix: k, iz };
     return { from, to, info: legInfo(from, to) };
   }
 
-  /**
-   * Put a traffic car of `typeName` on the road at (x, z) heading `heading`, driving its
-   * lane at `cruise` m/s (random when omitted). Returns the car.
-   */
   spawnAt(typeName, colour, x, z, heading, cruise = null) {
     const { from, to, info } = this.legAt(x, z, heading);
     const along = info.axis === 'z' ? z : x;
@@ -77,7 +66,6 @@ export class Traffic {
     return car;
   }
 
-  /** A fresh traffic car on a random road, away from the player's start. */
   spawnFar() {
     for (let tries = 0; tries < 8; tries += 1) {
       const ix = this.rng.int(0, GRID.blocks);
@@ -95,7 +83,6 @@ export class Traffic {
     }
   }
 
-  /** Move a car that drifted far from the player onto a road near the player. */
   relocateNear(entry, player) {
     const a = this.rng.range(0, Math.PI * 2);
     const d = this.rng.range(TRAFFIC.respawnNearMin, TRAFFIC.respawnNearMax);
@@ -110,7 +97,6 @@ export class Traffic {
     entry.driver.setLeg(from, to);
   }
 
-  /** How hard this car should brake for whatever is ahead of it (0 = clear). */
   blockedFor(car, peds) {
     const fx = Math.sin(car.heading);
     const fz = Math.cos(car.heading);
@@ -139,7 +125,6 @@ export class Traffic {
     return brake;
   }
 
-  /** Step every traffic car; `player` is the Player, for the respawn distance. */
   update(dt, world, peds, player) {
     for (const entry of this.cars) {
       const brake = this.blockedFor(entry.car, peds);
@@ -151,7 +136,6 @@ export class Traffic {
     }
   }
 
-  /** Hand a traffic car to the player: it stops being traffic. */
   release(car) {
     const i = this.cars.findIndex((e) => e.car === car);
     if (i >= 0) this.cars.splice(i, 1);

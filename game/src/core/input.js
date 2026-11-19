@@ -1,7 +1,3 @@
-// Keyboard and mouse state. Keys are tracked by `KeyboardEvent.code`, so the layout of the
-// player's keyboard does not matter. Presses are latched until consumed, which means a tap
-// shorter than a frame is never lost. Mouse drags and the wheel accumulate between frames.
-
 export class Input {
   constructor(surface) {
     this.held = new Set();
@@ -39,26 +35,22 @@ export class Input {
     return codes.some((c) => this.held.has(c));
   }
 
-  /** True once per press of any of the codes. */
   take(...codes) {
     let hit = false;
     for (const c of codes) if (this.pressed.delete(c)) hit = true;
     return hit;
   }
 
-  /** -1, 0 or 1 from a pair of key groups. */
   axis(negative, positive) {
     return (this.isDown(...positive) ? 1 : 0) - (this.isDown(...negative) ? 1 : 0);
   }
 
-  /** Hand over the mouse movement gathered since the last call. */
   takeLook() {
     const look = { ...this.look };
     this.look.x = this.look.y = this.look.wheel = 0;
     return look;
   }
 
-  /** Forget presses nobody asked about this frame. */
   endFrame() {
     this.pressed.clear();
   }

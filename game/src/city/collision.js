@@ -1,6 +1,3 @@
-// The solid parts of the city for physics: building footprints as boxes bucketed by grid cell,
-// the raised kerbs, the beach slope and the edges of the map. Walkers and cars push themselves
-// out as circles; the camera casts rays so it never ends up inside a wall.
 import { CELL, CITY_HALF, GRID, LIMITS, SHORE } from '../config.js';
 import { blockIndex } from './plan.js';
 
@@ -12,7 +9,6 @@ export class CityCollision {
     for (const b of plan.buildings) this.addBox(b.x0, b.z0, b.x1, b.z1, b.height);
   }
 
-  /** Register a solid axis-aligned box (x0..x1, z0..z1, from the ground up to `height`). */
   addBox(x0, z0, x1, z1, height = 3) {
     const box = { x0, z0, x1, z1, height };
     for (let cx = cellOf(x0); cx <= cellOf(x1); cx += 1) {
@@ -24,7 +20,6 @@ export class CityCollision {
     }
   }
 
-  /** Boxes in the cell under (x, z) and its eight neighbours. */
   *near(x, z) {
     const cx = cellOf(x);
     const cz = cellOf(z);
@@ -40,10 +35,6 @@ export class CityCollision {
     }
   }
 
-  /**
-   * Push the circle at `p` (mutated) out of every box and back inside the map. Returns the
-   * total push and the normal of the deepest contact, or null if nothing was touched.
-   */
   resolveCircle(p, radius) {
     let hit = null;
     for (const b of this.near(p.x, p.z)) {
@@ -55,7 +46,7 @@ export class CityCollision {
       if (d >= radius) continue;
       let depth;
       if (d < 1e-6) {
-        // centre is inside the box: leave by the nearest side
+        
         const exits = [[p.x - b.x0, -1, 0], [b.x1 - p.x, 1, 0], [p.z - b.z0, 0, -1], [b.z1 - p.z, 0, 1]];
         exits.sort((a, c) => a[0] - c[0]);
         const [gap, ex, ez] = exits[0];
@@ -80,19 +71,14 @@ export class CityCollision {
     return hit;
   }
 
-  /** Height of the walkable surface: kerb-high on blocks, sloping sand toward the surf. */
   groundHeight(x, z) {
     if (blockIndex(x) >= 0 && blockIndex(z) >= 0) return GRID.curb;
     const beach = x - CITY_HALF;
-    if (beach >= 0 && beach <= 6) return GRID.curb; // the promenade
+    if (beach >= 0 && beach <= 6) return GRID.curb; 
     if (beach > SHORE.sand - 20) return Math.max(SHORE.water - 0.3, -((beach - (SHORE.sand - 20)) / 20) * 0.9);
     return 0;
   }
 
-  /**
-   * How far along the segment from `a` to `b` (0..1) the first wall is, or 1 if clear.
-   * Used by the camera to pull in instead of clipping through buildings.
-   */
   castRay(a, b) {
     const dir = [b.x - a.x, b.y - a.y, b.z - a.z];
     let best = 1;

@@ -1,11 +1,7 @@
-// The sky and the light it throws: a gradient dome with a sun disk, glow and stars, the
-// shadow-casting sun (or moon) that follows the player so shadows stay crisp, the hemisphere
-// fill light, the distance fog, and a reflection map baked from the dome so glass towers, car
-// paint and the sea pick up the colour of the hour.
 import * as THREE from 'three';
 import { makeDaylight, sampleDaylight } from './daylight.js';
 
-const DOME_VERTEX = /* glsl */ `
+const DOME_VERTEX =  `
   varying vec3 vDir;
   void main() {
     vDir = normalize(position);
@@ -14,7 +10,7 @@ const DOME_VERTEX = /* glsl */ `
     gl_Position.z = gl_Position.w; // always at the far plane
   }`;
 
-const DOME_FRAGMENT = /* glsl */ `
+const DOME_FRAGMENT =  `
   uniform vec3 zenith;
   uniform vec3 horizon;
   uniform vec3 sunColour;
@@ -79,13 +75,11 @@ export class Sky {
 
     this.hemi = new THREE.HemisphereLight('#ffffff', '#444444', 1);
     scene.add(this.hemi);
-    // After dark, a warm pool of sodium light travels with the player, standing in for the
-    // street lamps (hundreds of real lights would be far too slow).
+    
     this.streetGlow = new THREE.PointLight('#ffc27a', 0, 46, 1.2);
     scene.add(this.streetGlow);
     scene.fog = new THREE.Fog('#cfe0ea', 120, 900);
 
-    // A sky-only scene for baking the reflection map.
     this.pmrem = new THREE.PMREMGenerator(renderer);
     this.envScene = new THREE.Scene();
     this.envDome = new THREE.Mesh(new THREE.SphereGeometry(100, 32, 16), domeMat);
@@ -97,7 +91,6 @@ export class Sky {
     this.envTarget = null;
   }
 
-  /** Apply the hour; centre the dome, shadow frustum and sun on `focus`. Returns the Daylight. */
   update(hour, focus, cameraPos) {
     const d = sampleDaylight(hour, this.day);
     const u = this.uniforms;
@@ -112,7 +105,7 @@ export class Sky {
 
     this.sun.color.copy(d.sun);
     this.sun.intensity = d.sunI;
-    // snap the shadow camera to texel-sized steps so shadows do not shimmer while moving
+    
     const texel = 140 / 2048;
     const fx = Math.round(focus.x / texel) * texel;
     const fz = Math.round(focus.z / texel) * texel;

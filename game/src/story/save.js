@@ -1,7 +1,3 @@
-// Save games for Port Solano: one localStorage slot holding the player's cash, the
-// missions they finished, the unlocks they earned and their running stats. The shape is
-// validated on load, so a save from a half-finished write or an old build is ignored.
-
 const KEY = 'port-solano-save-v1';
 
 export function loadSave() {
@@ -45,6 +41,6 @@ export function clearSave() {
   try {
     localStorage.removeItem(KEY);
   } catch {
-    // storage unavailable: nothing to clear
+    
   }
 }

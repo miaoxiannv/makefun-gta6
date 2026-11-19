@@ -21,6 +21,7 @@
     <div id="clock">16:15</div>
     <div id="money">$350</div>
     <div id="wanted" aria-label="wanted level"><i>★</i><i>★</i><i>★</i><i>★</i><i>★</i></div>
+    <button id="mute-button" type="button" aria-label="Toggle sound">🔊</button>
   </section>
 
   <section id="objective">
@@ -36,6 +37,7 @@
 
   <div id="prompt" hidden></div>
   <div id="toast"></div>
+  <div id="mission-card" hidden></div>
   <div id="damage-flash"></div>
 
   <aside id="help">
@@ -45,6 +47,7 @@
       <li><kbd>Shift</kbd> sprint · <kbd>Space</kbd> jump / handbrake</li>
       <li><kbd>E</kbd> steal a car / get out</li>
       <li><kbd>F</kbd> punch</li>
+      <li><kbd>M</kbd> mute sound · <kbd>H</kbd> hide this</li>
       <li><kbd>Q</kbd> <kbd>E</kbd> or drag: look · wheel: zoom</li>
       <li><kbd>Esc</kbd> pause</li>
     </ul>
@@ -67,6 +70,7 @@
     </div>
     <div id="mission-list"></div>
     <p id="title-progress"></p>
+    <p class="foot"><kbd>M</kbd> mute · <kbd>H</kbd> help · <kbd>Esc</kbd> pause</p>
     <p class="press">Press <kbd>Enter</kbd></p>
   </div>
 </div>

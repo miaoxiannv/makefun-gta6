@@ -1,11 +1,7 @@
-// The radar in the corner: a round, heading-up minimap. The whole city is painted once into an
-// off-screen canvas (roads, blocks by district, parks, beach, sea); each frame that image is
-// rotated under the player's arrow and the live blips are drawn on top: cash, cars, the
-// hospital and a north marker riding the rim.
 import { CITY_HALF, GRID, HOSPITAL, SHORE } from '../config.js';
 
-const SCALE = 1.1; // radar pixels per metre
-const PAD = 260; // metres of map painted beyond the city on every side
+const SCALE = 1.1; 
+const PAD = 260; 
 const BLOCK_COLOURS = { center: '#7f8fa3', beach: '#d7b9a1', heights: '#93a37c', docks: '#8c8778', brisa: '#a99a86', coral: '#8e96a0' };
 
 export class Radar {
@@ -21,13 +17,13 @@ export class Radar {
     const map = document.createElement('canvas');
     map.width = map.height = Math.ceil(span);
     const ctx = map.getContext('2d');
-    const at = (v) => v + CITY_HALF + PAD; // world metre -> map pixel (1 px per metre)
+    const at = (v) => v + CITY_HALF + PAD; 
     ctx.fillStyle = '#5a6a4d';
     ctx.fillRect(0, 0, map.width, map.height);
-    // city asphalt
+    
     ctx.fillStyle = '#d6d9dc';
     ctx.fillRect(at(-CITY_HALF), at(-CITY_HALF), CITY_HALF * 2, CITY_HALF * 2);
-    // sand and sea
+    
     ctx.fillStyle = '#e8d49e';
     ctx.fillRect(at(CITY_HALF), 0, SHORE.sand, map.height);
     ctx.fillStyle = '#3d86b8';
@@ -42,11 +38,6 @@ export class Radar {
     return map;
   }
 
-  /**
-   * Draw for a player at (x, z) facing `heading`, with the view turned to camera `yaw`.
-   * `blips` holds {cars, cash} lists, plus `police` cruisers (flashing red/blue), the
-   * `mission` target (a gold diamond) and `enemies` (red dots), and `time`.
-   */
   draw({ x, z, yaw, heading, inCar, cars, cash, police = [], mission = null, enemies = [], time = 0 }) {
     const { ctx, size } = this;
     const r = size / 2;
@@ -61,7 +52,6 @@ export class Radar {
     ctx.scale(SCALE, SCALE);
     ctx.drawImage(this.map, -this.at(x), -this.at(z));
 
-    // blips in world metres relative to the player
     const rel = (px, pz) => [px - x, pz - z];
     ctx.fillStyle = 'rgba(40,40,48,0.75)';
     for (const car of cars) {
@@ -73,7 +63,7 @@ export class Radar {
       ctx.fillRect(-1, -2.2, 2, 4.4);
       ctx.restore();
     }
-    // police cruisers flash red/blue on the radar
+    
     for (const car of police) {
       const [dx, dz] = rel(car.position.x, car.position.z);
       if (Math.abs(dx) > 130 || Math.abs(dz) > 130) continue;
@@ -82,7 +72,7 @@ export class Radar {
       ctx.arc(dx, dz, 4, 0, Math.PI * 2);
       ctx.fill();
     }
-    // rival crew: small red dots
+    
     ctx.fillStyle = '#ff2211';
     for (const e of enemies) {
       const [dx, dz] = rel(e.position.x, e.position.z);
@@ -93,7 +83,6 @@ export class Radar {
     }
     ctx.restore();
 
-    // icons stay upright, so place them in screen space
     const toScreen = (px, pz) => {
       const [dx, dz] = rel(px, pz);
       const c = Math.cos(turn);
@@ -107,7 +96,7 @@ export class Radar {
       const max = r - margin;
       return d > max ? [r + (dx / d) * max, r + (dy / d) * max, true] : [sx, sy, false];
     };
-    // the mission target: a gold diamond, clamped to the rim when far away
+    
     if (mission) {
       const [mx, my, clamped] = edge(...toScreen(mission.x, mission.z), 12);
       ctx.fillStyle = '#ffd54a';
@@ -140,7 +129,7 @@ export class Radar {
       ctx.fillRect(hx - 1.5, hy - 4.5, 3, 9);
       ctx.fillRect(hx - 4.5, hy - 1.5, 9, 3);
     }
-    // north marker
+    
     const [nx, ny] = edge(...toScreen(x, z - 10000), 11);
     ctx.fillStyle = 'rgba(10,14,22,0.85)';
     ctx.beginPath(); ctx.arc(nx, ny, 8, 0, Math.PI * 2); ctx.fill();
@@ -149,7 +138,6 @@ export class Radar {
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.fillText('N', nx, ny + 0.5);
 
-    // the player
     const a = Math.atan2(Math.cos(heading), Math.sin(heading)) + turn;
     ctx.save();
     ctx.translate(r, r);
@@ -162,7 +150,6 @@ export class Radar {
     ctx.fill(); ctx.stroke();
     ctx.restore();
 
-    // rim
     ctx.strokeStyle = 'rgba(255,255,255,0.85)';
     ctx.lineWidth = 3;
     ctx.beginPath(); ctx.arc(r, r, r - 2, 0, Math.PI * 2); ctx.stroke();

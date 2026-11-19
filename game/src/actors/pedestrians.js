@@ -1,7 +1,3 @@
-// The people of Port Solano: they stroll the sidewalks around a block, wait and look
-// around, cross the road to the next block, run from cars that get too close, and get
-// knocked down when a car actually hits them. They reuse the player's person rig with
-// different looks, and stay near the player (far ones are moved to a sidewalk nearby).
 import * as THREE from 'three';
 import { CELL, CITY_HALF, GRID, PEDESTRIANS } from '../config.js';
 import { blockStart } from '../city/plan.js';
@@ -26,7 +22,6 @@ function randomLook(rng) {
   };
 }
 
-/** The sidewalk rectangle around a block, inset from its edges. */
 function edgeRect(bx, bz) {
   return {
     x0: blockStart(bx) + 2.2, x1: blockStart(bx) + GRID.block - 2.2,
@@ -34,7 +29,6 @@ function edgeRect(bx, bz) {
   };
 }
 
-/** The four sidewalk edges, walked clockwise: start, end, heading, outward normal, opposite. */
 const EDGES = [
   { from: (r) => ({ x: r.x0, z: r.z0 }), to: (r) => ({ x: r.x1, z: r.z0 }), heading: Math.PI / 2, normal: { x: 0, z: -1 }, opposite: 2 },
   { from: (r) => ({ x: r.x1, z: r.z0 }), to: (r) => ({ x: r.x1, z: r.z1 }), heading: 0, normal: { x: 1, z: 0 }, opposite: 3 },
@@ -75,13 +69,11 @@ class Pedestrian {
   get x() { return this.position.x; }
   get z() { return this.position.z; }
 
-  /** The edge end this pedestrian is walking toward. */
   edgeEnd() {
     const r = edgeRect(this.block.bx, this.block.bz);
     return this.dir > 0 ? EDGES[this.edge].to(r) : EDGES[this.edge].from(r);
   }
 
-  /** The block across the road from `edge`, or null at the edge of the city. */
   acrossBlock(edge) {
     const { bx, bz } = this.block;
     const n = EDGES[edge].normal;
@@ -91,10 +83,8 @@ class Pedestrian {
     return { bx: nx, bz: nz };
   }
 
-  /** Drop this pedestrian on the nearest sidewalk edge of the nearest block. */
   snapToPerimeter() {
-    // re-anchor to the block this pedestrian is standing in now, so a knocked-down
-    // pedestrian does not teleport back to the block it started on
+    
     this.block = {
       bx: clamp(Math.floor((this.position.x + CITY_HALF - GRID.road) / CELL), 0, GRID.blocks - 1),
       bz: clamp(Math.floor((this.position.z + CITY_HALF - GRID.road) / CELL), 0, GRID.blocks - 1),
@@ -112,7 +102,6 @@ class Pedestrian {
     this.position.z = cands[0].point.z;
   }
 
-  /** Move to a random sidewalk 40-90 m from the player. */
   placeNear(player, rng) {
     const a = rng.range(0, Math.PI * 2);
     const d = rng.range(PEDESTRIANS.respawnNearMin, PEDESTRIANS.respawnNearMax);
@@ -133,7 +122,6 @@ class Pedestrian {
     this.state = 'walk';
   }
 
-  /** Step toward `heading` at `speed`, turning to face the way of travel. */
   walkToward(dt, heading, speed) {
     this.heading = approachAngle(this.heading, heading, 8 * dt);
     this.position.x += Math.sin(this.heading) * speed * dt;
@@ -176,7 +164,7 @@ class Pedestrian {
         this.walkToward(dt, Math.atan2(dx, dz), this.speed);
       }
     } else {
-      // walk: occasionally stop and look around
+      
       if (this.rng() < dt * 0.06) {
         this.state = 'wait';
         this.waitTimer = this.rng.range(1, 4);
@@ -186,10 +174,10 @@ class Pedestrian {
         this.walkToward(dt, edgeHeading, this.speed);
         const end = this.edgeEnd();
         if (Math.hypot(end.x - this.position.x, end.z - this.position.z) < 0.7) {
-          // corner reached: snap onto it so the walk never drifts off the sidewalk
+          
           this.position.x = end.x;
           this.position.z = end.z;
-          // cross the road, or turn onto the next edge
+          
           const across = this.rng.chance(0.25) ? this.acrossBlock(this.edge) : null;
           if (across) {
             const n = EDGES[this.edge].normal;
@@ -203,10 +191,6 @@ class Pedestrian {
       }
     }
 
-    // cars: run from a close one, get knocked down by one that hits. The hit test uses
-    // the car's body as an oriented box, not the distance to its centre: pushOutOfCars
-    // below keeps a walker outside that box, so a centre-distance test can never fire
-    // for a car coming up behind a fleeing pedestrian — it just snowplows them along.
     for (const car of cars) {
       if (car.asleep && !car.driver && !car.ai) continue;
       const dx = this.position.x - car.position.x;
@@ -215,8 +199,8 @@ class Pedestrian {
       if (d > 6) continue;
       const s = Math.sin(car.heading);
       const c = Math.cos(car.heading);
-      const along = dx * s + dz * c; // along the nose
-      const across = -dx * c + dz * s; // across to its right
+      const along = dx * s + dz * c; 
+      const across = -dx * c + dz * s; 
       const insideBody = Math.abs(across) < car.type.width / 2 + 0.45
         && Math.abs(along) < car.type.length / 2 + 0.45;
       if (insideBody) {
@@ -243,7 +227,7 @@ class Pedestrian {
     this.phase += dt * this.speedNow * 2.1;
     this.model.pose(this.phase, this.gait, false, time);
     if (this.state === 'down') {
-      // slumped on the ground after the hit
+      
       this.model.torso.rotation.x = 0.85;
       this.model.head.rotation.x = 0.4;
       this.model.hips.position.y = 0.6;
@@ -259,7 +243,7 @@ export class Pedestrians {
     this.list = [];
     for (let k = 0; k < PEDESTRIANS.count; k += 1) {
       const ped = new Pedestrian(scene, this.rng);
-      // pedestrians do not cast shadows: the software renderer stays fast
+      
       ped.model.root.traverse((o) => { if (o.isMesh) o.castShadow = false; });
       this.list.push(ped);
     }
@@ -267,7 +251,7 @@ export class Pedestrians {
 
   update(dt, time, world, cars, player, onPlayerHit) {
     for (const ped of this.list) ped.update(dt, time, world, cars, player, onPlayerHit);
-    // keep pedestrians from walking through each other
+    
     for (let i = 0; i < this.list.length; i += 1) {
       for (let k = i + 1; k < this.list.length; k += 1) {
         const a = this.list[i];
@@ -286,7 +270,7 @@ export class Pedestrians {
         }
       }
     }
-    // keep the crowd near the player
+    
     for (const ped of this.list) {
       if (Math.hypot(ped.position.x - player.position.x, ped.position.z - player.position.z) > PEDESTRIANS.respawnDist) {
         ped.placeNear(player, this.rng);
@@ -294,7 +278,6 @@ export class Pedestrians {
     }
   }
 
-  /** A punch lands at (x, z) facing `heading`: knock down whoever is inside the arc. */
   hitByPunch(x, z, heading, range, arc) {
     let hit = 0;
     const fx = Math.sin(heading);
@@ -316,7 +299,6 @@ export class Pedestrians {
     return hit;
   }
 
-  /** Push the player's circle out of every pedestrian. */
   pushOut(p, radius) {
     for (const ped of this.list) {
       const dx = p.x - ped.position.x;

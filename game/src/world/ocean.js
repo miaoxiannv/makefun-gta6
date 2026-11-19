@@ -1,6 +1,3 @@
-// The Gulf off Marisol Beach: a wide sheet of water whose vertices roll in slow swells, shaded
-// from turquoise shallows to deep blue, with a white surf line where it meets the sand. The
-// sky's reflection map does the glitter; the colours follow the hour.
 import * as THREE from 'three';
 import { CITY_HALF, SHORE } from '../config.js';
 
@@ -26,7 +23,6 @@ export class Ocean {
     this.mesh.receiveShadow = true;
     scene.add(this.mesh);
 
-    // surf: a pale, pulsing strip at the waterline
     this.surfMat = new THREE.MeshBasicMaterial({ color: '#f4fbff', transparent: true, opacity: 0.6, depthWrite: false });
     this.surf = new THREE.Mesh(new THREE.PlaneGeometry(5, 2400).rotateX(-Math.PI / 2), this.surfMat);
     this.surf.position.set(CITY_HALF + SHORE.sand - 12, SHORE.water + 0.08, 0);
@@ -35,7 +31,7 @@ export class Ocean {
   }
 
   update(time, day) {
-    // move the swell every other frame or so; plenty for slow water
+    
     if (time - this.lastWave > 1 / 30) {
       this.lastWave = time;
       const pos = this.mesh.geometry.attributes.position;

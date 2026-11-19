@@ -1,17 +1,12 @@
-// The plan of Port Solano: which block belongs to which district, where the parks are, the
-// street names, every building lot with its height and facade style, the kerbside parking
-// spots and the cash-drop spots. Pure data, no Three.js, built from the seed in one pass.
 import { CELL, CITY_HALF, GRID, CASH_DROPS } from '../config.js';
 import { makeRng } from '../core/rng.js';
 
-/** Centre line of road `i` (0..blocks) along either axis. */
 export const roadCentre = (i) => -CITY_HALF + GRID.road / 2 + i * CELL;
-/** West (or north) edge of block `i`. */
+
 export const blockStart = (i) => -CITY_HALF + GRID.road + i * CELL;
 
-/** North-south roads, west to east. Solano Blvd runs through the middle of downtown. */
 const AVENUES = ['Harbor Way', 'Cypress Ave', 'Palmetto St', 'Mangrove Ave', 'Solano Blvd', 'Flamingo Ave', 'Coquina St', 'Seagrape Ave', 'Marisol Drive'];
-/** East-west streets, north to south. */
+
 const STREETS = ['Northgate Rd', 'Orchid St', 'Hibiscus St', 'Bayview Ave', 'Sol Avenue', 'Pelican Way', 'Tarpon St', 'Anchor St', 'Dockside Rd'];
 
 export const DISTRICTS = {
@@ -23,7 +18,6 @@ export const DISTRICTS = {
   coral: { name: 'Coral Row', styles: ['office', 'office', 'tower'], tints: ['#e7ddd0', '#cfd8de', '#d9e4ec', '#f0e4d6'], floors: [5, 16] },
 };
 
-/** Blocks given over to green space, keyed "bx,bz". */
 const PARKS = { '2,4': 'Bayfront Park', '5,1': 'Jacaranda Square', '6,5': 'Marina Green', '1,1': 'Heights Commons' };
 
 export function districtOf(bx, bz) {
@@ -35,7 +29,6 @@ export function districtOf(bx, bz) {
   return 'brisa';
 }
 
-/** Index of the block containing coordinate v along one axis, or -1 on a road / off the grid. */
 export function blockIndex(v) {
   const local = v + CITY_HALF - GRID.road;
   if (local < 0) return -1;
@@ -46,7 +39,6 @@ export function blockIndex(v) {
 
 const nearestRoad = (v) => Math.max(0, Math.min(GRID.blocks, Math.round((v + CITY_HALF - GRID.road / 2) / CELL)));
 
-/** The street name for a world position (whichever road you are on or closest to). */
 export function streetAt(x, z) {
   if (x > CITY_HALF + 4) return 'Marisol Beach';
   const ix = nearestRoad(x);
@@ -64,7 +56,6 @@ export function districtAt(x, z) {
   return PARKS[`${bx},${bz}`] ?? DISTRICTS[districtOf(bx, bz)].name;
 }
 
-/** Split a length into pieces of roughly `target`, returned as [start, end] pairs. */
 function split(start, length, target, rng) {
   const n = Math.max(1, Math.round(length / target));
   const cuts = [start];
@@ -80,7 +71,7 @@ function planBuildings(bx, bz, kind, rng, out) {
   const z0 = blockStart(bz) + sw;
   const span = GRID.block - sw * 2;
   const lotSize = { center: 27, beach: 18, heights: 13, docks: 26, brisa: 18, coral: 22 }[kind];
-  // Downtown height falls off away from Solano Blvd and Sol Avenue.
+  
   const core = kind === 'center' ? 1 - Math.min(1, Math.hypot(blockStart(bx) + 32, blockStart(bz) + 32) / 200) : 0.5;
 
   for (const [ax, bxEnd] of split(x0, span, lotSize, rng)) {
@@ -106,7 +97,6 @@ function planBuildings(bx, bz, kind, rng, out) {
   }
 }
 
-/** Kerbside spots on every road segment: position and heading, right-hand side of the road. */
 function planParking(rng) {
   const spots = [];
   const offset = GRID.road / 2 - 1.6;
@@ -115,10 +105,10 @@ function planParking(rng) {
       const a = blockStart(b) + 7;
       const e = blockStart(b) + GRID.block - 7;
       for (let t = a; t <= e; t += 7.5) {
-        // north-south road i: east kerb faces north, west kerb faces south
+        
         if (rng.chance(0.18)) spots.push({ x: roadCentre(i) + offset, z: t, heading: Math.PI });
         if (rng.chance(0.18)) spots.push({ x: roadCentre(i) - offset, z: t, heading: 0 });
-        // east-west road i: south kerb faces east, north kerb faces west
+        
         if (rng.chance(0.18)) spots.push({ x: t, z: roadCentre(i) + offset, heading: Math.PI / 2 });
         if (rng.chance(0.18)) spots.push({ x: t, z: roadCentre(i) - offset, heading: -Math.PI / 2 });
       }
@@ -132,7 +122,7 @@ function planCash(rng) {
   while (spots.length < CASH_DROPS.count) {
     const bx = rng.int(0, GRID.blocks - 1);
     const bz = rng.int(0, GRID.blocks - 1);
-    // a corner of the block's sidewalk, where the drop is easy to see from the road
+    
     const x = blockStart(bx) + (rng.chance(0.5) ? 2.2 : GRID.block - 2.2);
     const z = blockStart(bz) + rng.range(6, GRID.block - 6);
     spots.push({ x, z });

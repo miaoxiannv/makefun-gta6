@@ -1,11 +1,8 @@
-// A small geometry accumulator. City blocks, street markings, cars and characters are built
-// out of many boxes and slanted boxes; adding them all into one BufferGeometry per material
-// keeps the draw-call count low enough for the whole city to render every frame.
 import * as THREE from 'three';
 
 const WHITE = new THREE.Color(1, 1, 1);
 const FACES = [
-  // corner indices for each face of an 8-corner solid, wound counter-clockwise from outside
+  
   { name: 'bottom', idx: [0, 1, 2, 3] },
   { name: 'top', idx: [7, 6, 5, 4] },
   { name: 'front', idx: [3, 2, 6, 7] },
@@ -26,13 +23,12 @@ export class MeshBuilder {
     return this.positions.length === 0;
   }
 
-  /** One flat quad from four [x, y, z] corners (counter-clockwise seen from the front). */
   quad(a, b, c, d, { color = WHITE, uv = null, normal = null } = {}) {
     let n = normal;
     if (!n) {
       const ac = new THREE.Vector3(c[0] - a[0], c[1] - a[1], c[2] - a[2]);
       const bd = new THREE.Vector3(d[0] - b[0], d[1] - b[1], d[2] - b[2]);
-      // The cross product of the two diagonals is robust even when the quad is slightly bent.
+      
       const v = new THREE.Vector3().crossVectors(ac, bd).normalize();
       n = [v.x, v.y, v.z];
     }
@@ -47,11 +43,6 @@ export class MeshBuilder {
     }
   }
 
-  /**
-   * A solid from 8 corners: 0-3 the bottom ring (-x-z, +x-z, +x+z, -x+z), 4-7 the top ring in
-   * the same order. `skip` names faces to leave out; `tile` sets metres per texture repeat so
-   * facades and pavements wrap their textures at a constant scale.
-   */
   solid(corners, { color = WHITE, skip = [], tile = null, faceColors = {} } = {}) {
     for (const face of FACES) {
       if (skip.includes(face.name)) continue;
@@ -67,7 +58,6 @@ export class MeshBuilder {
     }
   }
 
-  /** Axis-aligned box centred on (x, y, z), optionally turned by `yaw` about its own centre. */
   box(x, y, z, sx, sy, sz, options = {}) {
     const { yaw = 0 } = options;
     const hx = sx / 2;
@@ -83,10 +73,6 @@ export class MeshBuilder {
     this.solid(corners, options);
   }
 
-  /**
-   * A slanted box for car cabins and roofs: width `sx`, the bottom spans z in [z0, z1] and the
-   * top spans [t0, t1], from height y0 up to y1. `inset` narrows the top for a tumblehome.
-   */
   wedge(x, y0, y1, z0, z1, t0, t1, sx, { inset = 0, ...options } = {}) {
     const h = sx / 2;
     const ht = h - inset;
@@ -97,7 +83,6 @@ export class MeshBuilder {
     this.solid(corners, options);
   }
 
-  /** A flat horizontal rectangle at height y, facing up. */
   flat(x0, z0, x1, z1, y, options = {}) {
     const { tile = null } = options;
     const uv = tile ? [[x0 / tile[0], -z1 / tile[1]], [x1 / tile[0], -z1 / tile[1]], [x1 / tile[0], -z0 / tile[1]], [x0 / tile[0], -z0 / tile[1]]] : null;
@@ -114,7 +99,6 @@ export class MeshBuilder {
     return g;
   }
 
-  /** Build straight into a mesh with the given material. */
   mesh(material, { shadows = true } = {}) {
     const m = new THREE.Mesh(this.build(), material);
     m.castShadow = shadows;

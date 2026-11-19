@@ -1,7 +1,3 @@
-// The heads-up display: health bar, money counter that rolls up when you get paid, clock,
-// wanted stars, the street and district you are in, the objective card, the speedometer while
-// driving, the context prompt ("E  Get in"), toasts and the red flash when you get hurt.
-// Elements are only written when their text actually changes.
 import { clockText } from '../world/daylight.js';
 
 const $ = (id) => document.getElementById(id);
@@ -24,13 +20,28 @@ export class Hud {
       vehicle: $('vehicle-name'),
       prompt: $('prompt'),
       toast: $('toast'),
+      card: $('mission-card'),
+      mute: $('mute-button'),
       flash: $('damage-flash'),
       help: $('help'),
     };
     this.shownMoney = null;
     this.cache = new Map();
     this.toastTimer = 0;
+    this.cardTimer = 0;
     this.flash = 0;
+    this.el.mute.addEventListener('click', () => this.onMute?.());
+  }
+
+  setMuted(muted) {
+    this.el.mute.textContent = muted ? '🔇' : '🔊';
+  }
+
+  missionCard(html, seconds = 4) {
+    this.el.card.innerHTML = html;
+    this.el.card.hidden = false;
+    this.el.card.classList.add('on');
+    this.cardTimer = seconds;
   }
 
   show(visible) {
@@ -41,7 +52,6 @@ export class Hud {
     this.el.help.hidden = !this.el.help.hidden;
   }
 
-  /** Write `value` into element `key` (as `prop`) only if it changed. */
   set(key, prop, value) {
     const id = `${key}.${prop}`;
     if (this.cache.get(id) === value) return;
@@ -64,7 +74,7 @@ export class Hud {
   }
 
   update(dt, s) {
-    // the money counter rolls toward the real balance
+    
     if (this.shownMoney === null) this.shownMoney = s.cash;
     const diff = s.cash - this.shownMoney;
     this.shownMoney += Math.abs(diff) < 1 ? diff : diff * Math.min(1, dt * 6) + Math.sign(diff);
@@ -91,6 +101,13 @@ export class Hud {
     if (this.toastTimer > 0) {
       this.toastTimer -= dt;
       if (this.toastTimer <= 0) this.el.toast.classList.remove('on');
+    }
+    if (this.cardTimer > 0) {
+      this.cardTimer -= dt;
+      if (this.cardTimer <= 0) {
+        this.el.card.classList.remove('on');
+        this.el.card.hidden = true;
+      }
     }
     this.flash = Math.max(0, this.flash - dt * 2.5);
     this.set('flash', 'opacity', this.flash.toFixed(2));

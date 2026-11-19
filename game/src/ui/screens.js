@@ -1,8 +1,3 @@
-// The title screen, the pause screen and the busted screen: showing and hiding them, and
-// wiring their buttons and the Enter key to the callbacks the entry point hands in. The
-// title screen also lists Marla's jobs (locked until the previous one is done, ticked once
-// finished) and the pause screen shows progress and a two-click reset.
-
 const $ = (id) => document.getElementById(id);
 
 export class Screens {
@@ -45,7 +40,6 @@ export class Screens {
     });
   }
 
-  /** Fill the title screen: Continue when a save exists, else Start, plus the job list. */
   renderTitle(save, missions) {
     this.save = save;
     this.startButton.textContent = save ? 'Continue' : 'Start game';
@@ -58,6 +52,7 @@ export class Screens {
       const b = document.createElement('button');
       b.type = 'button';
       b.className = 'job';
+      b.classList.toggle('done', m.state === 'done');
       b.disabled = m.state === 'locked';
       b.innerHTML = `<b>${m.state === 'done' ? '✓ ' : ''}${m.name}</b><span>$${m.reward} · ${m.state === 'done' ? 'Done' : m.state === 'locked' ? 'Locked' : 'Open'}</span>`;
       if (m.state !== 'locked') b.addEventListener('click', () => this.onMission(m.id));
@@ -65,7 +60,6 @@ export class Screens {
     }
   }
 
-  /** Fill the pause screen with the player's progress so far. */
   renderStats(stats) {
     const unlocks = stats.unlocks.length ? stats.unlocks.join(' · ') : 'None yet';
     this.pauseStats.innerHTML = `<p>Jobs ${stats.missionsDone} of ${stats.total} done · <b class="cash">$${stats.earned.toLocaleString('en-US')}</b> earned · ${stats.knockouts} knockouts</p><p>Unlocks: ${unlocks}</p>`;

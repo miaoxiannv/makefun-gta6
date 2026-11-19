@@ -1,6 +1,3 @@
-// The player on foot: camera-relative walking and sprinting with acceleration, turning to face
-// the way they move, jumping with gravity, stepping up kerbs, and being pushed out of walls
-// and cars. When they get into a car, the car takes over and this just rides along.
 import * as THREE from 'three';
 import { WALKER } from '../config.js';
 import { approachAngle, damp } from '../core/rng.js';
@@ -17,8 +14,8 @@ export class Player {
     this.gait = 0;
     this.vehicle = null;
     this.time = 0;
-    this.punchTimer = 0; // seconds left of the punch swing, for the arm pose
-    this.attackCooldown = 0; // seconds until the next punch can land
+    this.punchTimer = 0; 
+    this.attackCooldown = 0; 
   }
 
   get object() {
@@ -33,23 +30,18 @@ export class Player {
     this.sync();
   }
 
-  /** Start a punch swing (the game resolves what it hits). */
   punch() {
     this.punchTimer = 0.25;
     this.attackCooldown = 0.45;
   }
 
-  /**
-   * One step. `controls.moveX/moveY` are -1..1 relative to the camera, whose yaw is `yaw`
-   * (the direction the camera looks along the ground). `world` answers collision questions.
-   */
   update(dt, controls, yaw, world) {
     this.time += dt;
     this.punchTimer = Math.max(0, this.punchTimer - dt);
     this.attackCooldown = Math.max(0, this.attackCooldown - dt);
     const fx = Math.sin(yaw);
     const fz = Math.cos(yaw);
-    // camera right = forward rotated -90 degrees about y
+    
     let wx = fx * controls.moveY - fz * controls.moveX;
     let wz = fz * controls.moveY + fx * controls.moveX;
     const len = Math.hypot(wx, wz);
@@ -72,7 +64,7 @@ export class Player {
     world.pushOutOfCars(this.position, WALKER.radius);
     const ground = world.groundHeight(this.position.x, this.position.z);
     if (this.position.y <= ground + 0.02 || (this.onGround && this.position.y - ground < 0.35)) {
-      // landing, or stepping up/down a kerb while walking
+      
       this.position.y = ground;
       if (this.velocity.y < 0) this.velocity.y = 0;
       this.onGround = true;
@@ -92,7 +84,7 @@ export class Player {
     root.rotation.y = this.heading;
     this.model.pose(this.phase, this.gait, !this.onGround, this.time);
     if (this.punchTimer > 0) {
-      // the right arm snaps forward for the punch
+      
       this.model.armR.rotation.x = -1.5;
       this.model.armR.rotation.z = 0;
       this.model.armR.knee.rotation.x = -0.1;

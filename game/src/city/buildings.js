@@ -1,7 +1,3 @@
-// Turns the building lots in the plan into geometry: facade walls (one merged mesh per facade
-// style, tinted per building), roofs with parapets, rooftop clutter, terracotta hip roofs in
-// Palm Heights, beach-front awnings and antenna crowns on the tallest downtown towers. At night
-// the facade materials switch on their lit-window maps.
 import * as THREE from 'three';
 import { GRID } from '../config.js';
 import { MeshBuilder } from '../core/mesh-builder.js';
@@ -36,7 +32,7 @@ export class Buildings {
       walls[b.style].box(cx, b.height / 2, cz, w, b.height, d, { skip: ['top', 'bottom'], tile, color });
 
       if (b.roof === 'tiles') {
-        // a hipped terracotta roof over a little eave
+        
         const eave = 0.6;
         const ridge = Math.min(w, d) * 0.32;
         const along = w > d;
@@ -45,7 +41,7 @@ export class Buildings {
           { inset: along ? ridge : (w + eave * 2) / 2 - 0.2, color: new THREE.Color(rng.pick(TERRACOTTA)) });
       } else {
         roofs.flat(b.x0, b.z0, b.x1, b.z1, b.height, { tile: [8, 8] });
-        // parapet
+        
         const p = 0.35;
         const ph = 0.9;
         const pc = color.clone().multiplyScalar(0.92);
@@ -53,7 +49,7 @@ export class Buildings {
         trim.box(cx, b.height + ph / 2, b.z1 - p / 2, w, ph, p, { color: pc });
         trim.box(b.x0 + p / 2, b.height + ph / 2, cz, p, ph, d - p * 2, { color: pc });
         trim.box(b.x1 - p / 2, b.height + ph / 2, cz, p, ph, d - p * 2, { color: pc });
-        // HVAC units, a stair hut, sometimes a water tank
+        
         const grey = new THREE.Color('#b9b6b0');
         for (let k = rng.int(1, 3); k > 0; k -= 1) {
           const sx = rng.range(1.5, 3.5);
@@ -69,7 +65,7 @@ export class Buildings {
       }
 
       if (b.crown) {
-        // stepped crown, antenna mast and a red aviation light
+        
         const c2 = color.clone().multiplyScalar(0.95);
         trim.box(cx, b.height + 2, cz, w * 0.7, 4, d * 0.7, { color: c2 });
         trim.box(cx, b.height + 5.5, cz, w * 0.4, 3, d * 0.4, { color: c2 });
@@ -77,7 +73,6 @@ export class Buildings {
         glow.box(cx, b.height + 19.2, cz, 0.7, 0.7, 0.7, { color: new THREE.Color('#ff3b30') });
       }
 
-      // Shopfront awnings over the sidewalk on the low-rise streets.
       if ((b.district === 'beach' || b.district === 'brisa') && rng.chance(0.7)) {
         const ac = new THREE.Color(rng.pick(AWNINGS));
         const faceSouth = rng.chance(0.5);
@@ -109,7 +104,6 @@ export class Buildings {
     if (!glow.empty) this.group.add(glow.mesh(this.beacons, { shadows: false }));
   }
 
-  /** Light the windows as the sun goes down (night 0..1) and blink the aviation beacons. */
   update(night, time) {
     for (const mat of this.facadeMaterials) mat.emissiveIntensity = night * 1.25;
     this.beacons.emissiveIntensity = 0.4 + 6 * night * (Math.sin(time * 3) > 0 ? 1 : 0.15);

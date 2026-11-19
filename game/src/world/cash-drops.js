@@ -1,5 +1,3 @@
-// Cash drops: spinning green bundles of bills tucked around the city, shown on the radar. Walk
-// or drive through one to pocket it; it comes back a while later somewhere you have been.
 import * as THREE from 'three';
 import { CASH_DROPS, GRID } from '../config.js';
 import { makeRng } from '../core/rng.js';
@@ -28,7 +26,6 @@ export class CashDrops {
     });
   }
 
-  /** Spin the bundles, respawn taken ones and return the cash collected at (x, z) this step. */
   update(dt, time, x, z, extraReach = 0) {
     let found = 0;
     const reach = CASH_DROPS.radius + extraReach;

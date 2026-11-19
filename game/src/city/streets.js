@@ -1,7 +1,3 @@
-// The ground of Port Solano: asphalt for every road, raised kerbed sidewalks around each block,
-// lawns in the parks and up in Palm Heights, concrete yards in Dockside, the painted road
-// markings (double yellow centre lines, lane dashes, stop lines and zebra crossings), the beach
-// promenade and the scrubland beyond the city limits.
 import * as THREE from 'three';
 import { CITY_HALF, CITY_SIZE, GRID, SHORE } from '../config.js';
 import { MeshBuilder } from '../core/mesh-builder.js';
@@ -16,9 +12,8 @@ function material(map, { roughness = 0.95, color = '#ffffff' } = {}) {
   return new THREE.MeshStandardMaterial({ map, roughness, color, vertexColors: true });
 }
 
-/** Painted lines for one road segment between two intersections. */
 function markSegment(paint, along, across, from, to) {
-  // `along`/`across` swap x and z so the same code paints both road directions.
+  
   const strip = (a0, a1, c0, c1, color) => {
     const [x0, z0] = along === 'z' ? [c0, a0] : [a0, c0];
     const [x1, z1] = along === 'z' ? [c1, a1] : [a1, c1];
@@ -30,7 +25,7 @@ function markSegment(paint, along, across, from, to) {
   for (const lane of [-3.6, 3.6]) {
     for (let t = from + 6; t + 3 < to - 5; t += 7) strip(t, t + 3, c + lane - 0.07, c + lane + 0.07, WHITE);
   }
-  // zebra crossings and stop lines at both ends
+  
   for (const [edge, dir] of [[from, 1], [to, -1]]) {
     for (let s = -GRID.road / 2 + 0.8; s < GRID.road / 2 - 0.5; s += 1.3) strip(edge + dir * 0.6, edge + dir * 3.2, c + s, c + s + 0.65, WHITE);
     const stop = edge + dir * 3.9;
@@ -43,7 +38,6 @@ export function buildStreets(plan) {
   const group = new THREE.Group();
   group.name = 'streets';
 
-  // One asphalt sheet under the whole grid.
   const asphalt = asphaltTexture();
   asphalt.repeat.set(CITY_SIZE / 10, CITY_SIZE / 10);
   const road = new THREE.Mesh(new THREE.PlaneGeometry(CITY_SIZE, CITY_SIZE), new THREE.MeshStandardMaterial({ map: asphalt, roughness: 0.9 }));
@@ -51,7 +45,6 @@ export function buildStreets(plan) {
   road.receiveShadow = true;
   group.add(road);
 
-  // Scrub and dunes beyond the city limits, slightly lower so the asphalt never fights it.
   const scrubTex = grassTexture();
   scrubTex.repeat.set(160, 160);
   const scrub = new THREE.Mesh(new THREE.PlaneGeometry(3200, 3200), new THREE.MeshStandardMaterial({ map: scrubTex, color: '#c7b27d', roughness: 1 }));
@@ -60,7 +53,6 @@ export function buildStreets(plan) {
   scrub.receiveShadow = true;
   group.add(scrub);
 
-  // Sidewalk slabs, kerbs and block interiors.
   const walk = new MeshBuilder();
   const lawn = new MeshBuilder();
   const yard = new MeshBuilder();
@@ -72,7 +64,7 @@ export function buildStreets(plan) {
     if (b.park || b.kind === 'heights') lawn.flat(...inner, h + 0.01, { tile: [6, 6] });
     else if (b.kind === 'docks') yard.flat(...inner, h + 0.005, { tile: [7, 7], color: new THREE.Color('#9a958c') });
   }
-  // The promenade between Marisol Drive and the sand.
+  
   walk.box(CITY_HALF + 3, h / 2, 0, 6, h, CITY_SIZE, { skip: ['bottom'], tile: [3, 3] });
 
   const pave = pavementTexture();
@@ -80,13 +72,12 @@ export function buildStreets(plan) {
   group.add(lawn.mesh(material(grassTexture()), { shadows: false }));
   group.add(yard.mesh(material(pave, { color: '#bdb6aa' }), { shadows: false }));
 
-  // Sand from the promenade to the surf, sloping under the water line.
   const sandTex = sandTexture();
   sandTex.repeat.set(SHORE.sand / 6, (CITY_SIZE + 400) / 6);
   const sandGeo = new THREE.PlaneGeometry(SHORE.sand + 40, CITY_SIZE + 400, 24, 1);
   const pos = sandGeo.attributes.position;
   for (let i = 0; i < pos.count; i += 1) {
-    const local = pos.getX(i) + (SHORE.sand + 40) / 2; // 0 at the promenade edge
+    const local = pos.getX(i) + (SHORE.sand + 40) / 2; 
     pos.setZ(i, local < SHORE.sand - 20 ? 0.02 : 0.02 - ((local - (SHORE.sand - 20)) / 20) * 0.9);
   }
   sandGeo.computeVertexNormals();
@@ -96,7 +87,6 @@ export function buildStreets(plan) {
   sand.receiveShadow = true;
   group.add(sand);
 
-  // Road paint.
   const paint = new MeshBuilder();
   for (let i = 0; i <= GRID.blocks; i += 1) {
     for (let b = 0; b < GRID.blocks; b += 1) {
